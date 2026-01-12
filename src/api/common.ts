@@ -47,8 +47,10 @@ export interface UserMeta extends CommonMeta {
 class MetaStore {
   private static instance: MetaStore;
   private responseCache: Map<string, Promise<Response>>;
+  private metaCache: Map<string, CommonMeta>;
   private constructor() {
     this.responseCache = new Map<string, Promise<Response>>();
+    this.metaCache = new Map<string, CommonMeta>();
   }
 
   public static getInstance(): MetaStore {
@@ -64,7 +66,13 @@ class MetaStore {
    */
   private fetchMeta(platform: string, name: string) {
     const url = `${OSS_XLAB_ENDPOINT}/${platform}/${name}/meta.json`;
-    const promise = fetch(url);
+    // Cache the promise to avoid duplicate requests with error handling
+    const promise = fetch(url).catch((error) => {
+      // Handle fetch errors gracefully
+      console.error(`Failed to fetch meta for ${name}:`, error);
+      // Return a fake response with 404 status
+      return new Response(null, { status: 404 });
+    });
     const cacheKey = `${platform}:${name}`;
     this.responseCache.set(cacheKey, promise);
   }
@@ -75,16 +83,17 @@ class MetaStore {
    * @returns true if the meta file exists, false otherwise
    */
   public async has(platform: string, name: string) {
+    // Check meta cache first
     const cacheKey = `${platform}:${name}`;
+    if (this.metaCache.has(cacheKey)) {
+      return true;
+    }
+
     if (!this.responseCache.has(cacheKey)) {
       this.fetchMeta(platform, name);
     }
     const response = await this.responseCache.get(cacheKey)!;
-    if (!response.ok) {
-      return false;
-    } else {
-      return true;
-    }
+    return response.ok;
   }
 
   /**
@@ -93,15 +102,27 @@ class MetaStore {
    * @returns the parsed meta file if it exists, undefined otherwise
    */
   public async get(platform: string, name: string): Promise<CommonMeta | undefined> {
-    if (await this.has(platform, name)) {
-      const cacheKey = `${platform}:${name}`;
-      const meta: CommonMeta = await this.responseCache
-        .get(cacheKey)!
-        // clone the response to avoid the response being used up
-        // https://stackoverflow.com/a/54115314/10369621
-        .then((res) => res.clone().json());
-      return meta;
+    // Check meta cache first
+    const cacheKey = `${platform}:${name}`;
+    if (this.metaCache.has(cacheKey)) {
+      return this.metaCache.get(cacheKey);
     }
+
+    if (await this.has(platform, name)) {
+      try {
+        const meta: CommonMeta = await this.responseCache
+          .get(cacheKey)!
+          // clone the response to avoid the response being used up
+          // https://stackoverflow.com/a/54115314/10369621
+          .then((res) => res.clone().json());
+        this.metaCache.set(cacheKey, meta);
+        return meta;
+      } catch (error) {
+        console.error(`Failed to parse meta for ${name}:`, error);
+        return undefined;
+      }
+    }
+    return undefined;
   }
 }
 
