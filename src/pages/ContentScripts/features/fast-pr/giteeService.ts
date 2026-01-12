@@ -158,7 +158,6 @@ const createPullRequest = async (
   giteeToken: string
 ) => {
   const head = forkRepo != originalRepo ? `${forkRepo}:${newBranch}` : newBranch;
-  console.log(head);
   const response = await fetch(url.CREATE_PULL_REQUEST_URL(originalRepo), {
     method: 'POST',
     headers: {
@@ -173,7 +172,6 @@ const createPullRequest = async (
       base: branch,
     }),
   });
-  console.log(response);
   if (!response.ok) {
     return {
       success: false,
