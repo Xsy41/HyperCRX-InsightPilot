@@ -1,5 +1,5 @@
 const isGitee = (): boolean => {
-  return window.location.href.startsWith('https://gitee.com/');
+  return window.location.hostname === 'gitee.com';
 };
 
 export default isGitee;
