@@ -65,18 +65,18 @@ export default async function shouldFeatureRun(props: ShouldRunConditions): Prom
   }
 
   // First check exclude conditions - if any are true, we can immediately return false
-  const excludeResults = await Promise.all(exclude.map(safeExecuteCondition));
+  const excludeResults = await Promise.all(exclude.map((condition) => safeExecuteCondition(condition)));
   if (excludeResults.some(Boolean)) {
     return false;
   }
 
   // Then check asLongAs conditions - if any are false, we can immediately return false
-  const asLongAsResults = await Promise.all(asLongAs.map(safeExecuteCondition));
+  const asLongAsResults = await Promise.all(asLongAs.map((condition) => safeExecuteCondition(condition)));
   if (!asLongAsResults.every(Boolean)) {
     return false;
   }
 
   // Finally check include conditions - need at least one true
-  const includeResults = await Promise.all(include.map(safeExecuteCondition));
+  const includeResults = await Promise.all(include.map((condition) => safeExecuteCondition(condition)));
   return includeResults.some(Boolean);
 }
