@@ -31,7 +31,7 @@ const Bars = (props: BarsProps): JSX.Element => {
   const { timeLength, minInterval } = getInterval(data1);
   const divEL = useRef(null);
 
-  const TH = theme == 'light' ? LIGHT_THEME : DARK_THEME;
+  const TH = theme === 'light' ? LIGHT_THEME : DARK_THEME;
   const option: echarts.EChartsOption = {
     color: TH.PALLET,
     legend: {
@@ -154,13 +154,22 @@ const Bars = (props: BarsProps): JSX.Element => {
     if (instance) {
       judgeInterval(instance, timeLength);
       instance.setOption(option);
+
+      let clickHandler: any;
       if (onClick) {
-        instance.on('click', (params) => {
+        clickHandler = (params: any) => {
           onClick(params);
-        });
+        };
+        instance.on('click', clickHandler);
       }
+
+      return () => {
+        if (clickHandler) {
+          instance.off('click', clickHandler);
+        }
+      };
     }
-  }, []);
+  }, [option, onClick, timeLength]);
 
   return <div ref={divEL} style={{ width: '100%', height }}></div>;
 };
