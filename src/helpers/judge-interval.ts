@@ -6,10 +6,10 @@ export function getInterval(data: any) {
   return { timeLength, minInterval };
 }
 
-export function judgeInterval(instance: any, option: any, timeLength: number) {
+export function judgeInterval(instance: any, timeLength: number) {
   if (timeLength > 2) {
     instance.on('dataZoom', (params: any) => {
-      let option = instance.getOption() as {
+      let chartOption = instance.getOption() as {
         xAxis: { minInterval?: any }[];
       };
       const startValue = params.batch[0].start;
@@ -20,8 +20,8 @@ export function judgeInterval(instance: any, option: any, timeLength: number) {
       } else {
         minInterval = 30 * 24 * 3600 * 1000;
       }
-      option.xAxis[0].minInterval = minInterval;
-      instance.setOption(option);
+      chartOption.xAxis[0].minInterval = minInterval;
+      instance.setOption(chartOption);
     });
   }
 }

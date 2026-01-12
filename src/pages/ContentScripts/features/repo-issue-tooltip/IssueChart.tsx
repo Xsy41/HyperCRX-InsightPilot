@@ -157,7 +157,7 @@ const IssueChart = (props: IssueChartProps): JSX.Element => {
     let chartDOM = divEL.current;
     const instance = echarts.getInstanceByDom(chartDOM as any);
     if (instance) {
-      judgeInterval(instance, option, timeLength);
+      judgeInterval(instance, timeLength);
       instance.setOption(option);
       if (onClick) {
         instance.on('click', (params) => {
