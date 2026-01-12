@@ -42,11 +42,6 @@ const { version } = chrome.runtime.getManifest();
 const logError = (id: string, error: unknown): void => {
   const message = error instanceof Error ? error.message : String(error);
 
-  if (message.includes('token')) {
-    console.log('ℹ️', id, '→', message);
-    return;
-  }
-
   // Don't change this to `throw Error` because Firefox doesn't show extensions' errors in the console
   console.group(`❌ ${id}`); // Safari supports only one parameter
   console.log(`📕 ${version} →`, error); // One parameter improves Safari formatting
