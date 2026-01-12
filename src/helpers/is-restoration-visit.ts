@@ -12,5 +12,5 @@ document.addEventListener('turbo:visit', ((event: CustomEvent) => {
 
 // so this function can return the right visitType whenever called
 export default function isRestorationVisit() {
-  return visitType === 'restore' ? true : false;
+  return visitType === 'restore';
 }

@@ -14,8 +14,8 @@ export default async function shouldFeatureRun(props: ShouldRunConditions): Prom
     exclude = [() => false],
   } = props;
   return (
-    (await Promise.all(asLongAs.map((c) => c())).then((flags) => flags.every((flag) => flag === true))) &&
-    (await Promise.all(include.map((c) => c())).then((flags) => flags.some((flag) => flag === true))) &&
-    (await Promise.all(exclude.map((c) => c())).then((flags) => flags.every((flag) => flag === false)))
+    (await Promise.all(asLongAs.map((c) => c()))).every(Boolean) &&
+    (await Promise.all(include.map((c) => c()))).some(Boolean) &&
+    !(await Promise.all(exclude.map((c) => c()))).some(Boolean)
   );
 }
