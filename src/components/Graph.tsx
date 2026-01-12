@@ -1,4 +1,4 @@
-import React, { CSSProperties, useEffect, useRef } from 'react';
+import React, { CSSProperties, useEffect, useRef, useMemo } from 'react';
 import * as echarts from 'echarts';
 
 import linearMap from '../helpers/linear-map';
@@ -62,7 +62,7 @@ const generateEchartsData = (data: any, focusedNodeID: string | undefined): any 
 
 const Graph: React.FC<GraphProps> = ({ data, style = {}, focusedNodeID }) => {
   const divEL = useRef(null);
-  const graphData = generateEchartsData(data, focusedNodeID);
+  const graphData = useMemo(() => generateEchartsData(data, focusedNodeID), [data, focusedNodeID]);
   const option = {
     tooltip: {},
     animation: true,
@@ -115,17 +115,32 @@ const Graph: React.FC<GraphProps> = ({ data, style = {}, focusedNodeID }) => {
     const instance = echarts.getInstanceByDom(chartDOM as any);
     if (instance) {
       instance.setOption(option);
-      instance.on('click', (params: any) => {
-        const url = 'https://github.com/' + params.data.id;
+
+      const handleClick = (params: any) => {
+        // 根据ID格式判断平台，支持github.com和gitee.com等
+        const id = params.data.id;
+        let baseUrl = 'https://github.com/';
+        if (id.includes('gitee.com/')) {
+          baseUrl = 'https://';
+        }
+        const url = baseUrl + id;
         window.location.href = url;
-      });
+      };
+
+      instance.on('click', handleClick);
 
       const debouncedResize = debounce(() => {
         instance.resize();
       }, 500);
+
       window.addEventListener('resize', debouncedResize);
+
+      return () => {
+        instance.off('click', handleClick);
+        window.removeEventListener('resize', debouncedResize);
+      };
     }
-  }, []);
+  }, [option]);
 
   return (
     <div className="hypertrons-crx-border">
