@@ -1,4 +1,4 @@
-export const formatNum = (num: number, index: number) => {
+export const formatNum = (num: number) => {
   let isNegative = false;
   if (num < 0) {
     isNegative = true;
