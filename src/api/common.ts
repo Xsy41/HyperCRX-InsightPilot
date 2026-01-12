@@ -66,14 +66,15 @@ class MetaStore {
    */
   private fetchMeta(platform: string, name: string) {
     const url = `${OSS_XLAB_ENDPOINT}/${platform}/${name}/meta.json`;
-    // Cache the promise to avoid duplicate requests
+    // Cache the promise to avoid duplicate requests with error handling
     const promise = fetch(url).catch((error) => {
       // Handle fetch errors gracefully
       console.error(`Failed to fetch meta for ${name}:`, error);
       // Return a fake response with 404 status
       return new Response(null, { status: 404 });
     });
-    this.responseCache.set(name, promise);
+    const cacheKey = `${platform}:${name}`;
+    this.responseCache.set(cacheKey, promise);
   }
 
   /**
@@ -83,14 +84,15 @@ class MetaStore {
    */
   public async has(platform: string, name: string) {
     // Check meta cache first
-    if (this.metaCache.has(name)) {
+    const cacheKey = `${platform}:${name}`;
+    if (this.metaCache.has(cacheKey)) {
       return true;
     }
 
-    if (!this.responseCache.has(name)) {
+    if (!this.responseCache.has(cacheKey)) {
       this.fetchMeta(platform, name);
     }
-    const response = await this.responseCache.get(name)!;
+    const response = await this.responseCache.get(cacheKey)!;
     return response.ok;
   }
 
@@ -101,19 +103,19 @@ class MetaStore {
    */
   public async get(platform: string, name: string): Promise<CommonMeta | undefined> {
     // Check meta cache first
-    if (this.metaCache.has(name)) {
-      return this.metaCache.get(name);
+    const cacheKey = `${platform}:${name}`;
+    if (this.metaCache.has(cacheKey)) {
+      return this.metaCache.get(cacheKey);
     }
 
-    if (!this.responseCache.has(name)) {
-      this.fetchMeta(platform, name);
-    }
-
-    const response = await this.responseCache.get(name)!;
-    if (response.ok) {
+    if (await this.has(platform, name)) {
       try {
-        const meta: CommonMeta = await response.json();
-        this.metaCache.set(name, meta);
+        const meta: CommonMeta = await this.responseCache
+          .get(cacheKey)!
+          // clone the response to avoid the response being used up
+          // https://stackoverflow.com/a/54115314/10369621
+          .then((res) => res.clone().json());
+        this.metaCache.set(cacheKey, meta);
         return meta;
       } catch (error) {
         console.error(`Failed to parse meta for ${name}:`, error);

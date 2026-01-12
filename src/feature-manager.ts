@@ -12,7 +12,7 @@ import optionsStorage from './options-storage';
 import { throttle } from 'lodash-es';
 
 type FeatureInit = () => Promisable<void>;
-type FeatureRestore = Function;
+type FeatureRestore = () => Promisable<void>;
 
 type FeatureLoader = {
   /**

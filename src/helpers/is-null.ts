@@ -12,5 +12,5 @@ export function isNull(object: any) {
 }
 
 export function isAllNull(obj: Object) {
-  return Object.values(obj).every((value) => value === null);
+  return Object.values(obj).every((value) => isNull(value));
 }
