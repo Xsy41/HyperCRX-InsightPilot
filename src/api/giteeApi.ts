@@ -1,4 +1,4 @@
-import { getGiteeToken, saveGiteeToken } from '../helpers/gitee-token';
+import { getGiteeToken, saveGiteeToken, removeGiteeToken } from '../helpers/gitee-token';
 
 export const giteeRequest = async (endpoint: string, options: RequestInit = {}): Promise<any | null> => {
   const token = await getGiteeToken();
@@ -6,16 +6,22 @@ export const giteeRequest = async (endpoint: string, options: RequestInit = {}):
     return null;
   }
 
-  const url = `https://gitee.com/api/v5/${endpoint}?access_token=${token}`;
+  const url = `https://gitee.com/api/v5/${endpoint}`;
 
   try {
     const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
       ...options,
     });
+    if (!response.ok) {
+      return null;
+    }
     return response.json();
   } catch (error) {
     return null;
   }
 };
 
-export { saveGiteeToken, getGiteeToken };
+export { saveGiteeToken, getGiteeToken, removeGiteeToken };

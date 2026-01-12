@@ -19,11 +19,17 @@ export const getGiteeToken = async (): Promise<string | null> => {
   if (!tokenInfo.expireAt || tokenInfo.expireAt > Date.now()) {
     return tokenInfo.token || null;
   } else {
-    console.log('Gitee token expired and need refesh');
-    const refreshReq = await fetch(
-      `https://gitee.com/oauth/token?grant_type=refresh_token&refresh_token=${tokenInfo.refreshToken}`,
-      { method: 'POST' }
-    );
+    console.log('Gitee token expired and need refresh');
+    const refreshReq = await fetch(`https://gitee.com/oauth/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: tokenInfo.refreshToken,
+      }),
+    });
     const refreshData = await refreshReq.json();
     if (!refreshData) {
       console.log('Gitee token refresh failed');
