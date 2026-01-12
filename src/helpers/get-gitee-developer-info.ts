@@ -30,9 +30,13 @@ export async function isDeveloperWithMeta() {
   if (platform === 'unknown') {
     return false;
   }
-  return pageDetect.isUserProfile() && (await metaStore.has(platform, getDeveloperName()));
+  return isUserProfile() && (await metaStore.has(platform, getDeveloperName()));
 }
 
 export async function isUserProfile() {
-  return pageDetect.isUserProfile();
+  const currentUrl = window.location.href;
+  const parsedUrl = new URL(currentUrl);
+  const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+  // Gitee user profile URL format: https://gitee.com/{username}
+  return pathParts.length === 1 && parsedUrl.search === '';
 }

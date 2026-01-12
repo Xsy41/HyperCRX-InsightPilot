@@ -11,10 +11,20 @@ export function getRepoName() {
 }
 
 export function getRepoNameByUrl() {
-  return pageDetect.utils.getRepositoryInfo(window.location)!.nameWithOwner;
+  const currentUrl = window.location.href;
+  const parsedUrl = new URL(currentUrl);
+  const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+  if (pathParts.length >= 2) {
+    return `${pathParts[0]}/${pathParts[1]}`;
+  }
+  return '';
 }
 export async function isRepoRoot() {
-  return pageDetect.isRepoRoot();
+  const currentUrl = window.location.href;
+  const parsedUrl = new URL(currentUrl);
+  const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+  // Gitee repo root URL format: https://gitee.com/{owner}/{repo}
+  return pathParts.length === 2 && parsedUrl.search === '';
 }
 export function hasRepoContainerHeader() {
   const headerElement = $('#git-project-header-details');
