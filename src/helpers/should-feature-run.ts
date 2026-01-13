@@ -24,24 +24,59 @@ export interface ShouldRunConditions {
 }
 
 /**
+ * Safe condition executor that handles errors gracefully
+ * @param condition The condition function to execute
+ * @returns boolean result, false if condition throws an error
+ */
+async function safeExecuteCondition(condition: ConditionFunction): Promise<boolean> {
+  try {
+    const result = await Promise.resolve(condition());
+    return Boolean(result);
+  } catch (error) {
+    console.error('Error executing condition:', error);
+    return false;
+  }
+}
+
+/**
  * Determine whether a feature should run based on the given conditions
  * @param props The conditions to check
  * @returns true if the feature should run, false otherwise
  */
 export default async function shouldFeatureRun(props: ShouldRunConditions): Promise<boolean> {
+  // Validate input
+  if (!props || typeof props !== 'object') {
+    throw new TypeError('Props must be an object');
+  }
+
   const { asLongAs = [() => true], include = [() => true], exclude = [() => false] } = props;
 
-  // Run all conditions in parallel for better performance
-  const [asLongAsResults, includeResults, excludeResults] = await Promise.all([
-    Promise.all(asLongAs.map((condition) => condition())),
-    Promise.all(include.map((condition) => condition())),
-    Promise.all(exclude.map((condition) => condition())),
-  ]);
+  // Validate condition arrays
+  if (!Array.isArray(asLongAs) || !Array.isArray(include) || !Array.isArray(exclude)) {
+    throw new TypeError('asLongAs, include, and exclude must be arrays');
+  }
 
-  // Check all conditions
-  const allAsLongAsTrue = asLongAsResults.every(Boolean);
-  const anyIncludeTrue = includeResults.some(Boolean);
-  const noExcludeTrue = !excludeResults.some(Boolean);
+  // Validate all conditions are functions
+  const allConditions = [...asLongAs, ...include, ...exclude];
+  for (const condition of allConditions) {
+    if (typeof condition !== 'function') {
+      throw new TypeError('All conditions must be functions');
+    }
+  }
 
-  return allAsLongAsTrue && anyIncludeTrue && noExcludeTrue;
+  // First check exclude conditions - if any are true, we can immediately return false
+  const excludeResults = await Promise.all(exclude.map((condition) => safeExecuteCondition(condition)));
+  if (excludeResults.some(Boolean)) {
+    return false;
+  }
+
+  // Then check asLongAs conditions - if any are false, we can immediately return false
+  const asLongAsResults = await Promise.all(asLongAs.map((condition) => safeExecuteCondition(condition)));
+  if (!asLongAsResults.every(Boolean)) {
+    return false;
+  }
+
+  // Finally check include conditions - need at least one true
+  const includeResults = await Promise.all(include.map((condition) => safeExecuteCondition(condition)));
+  return includeResults.some(Boolean);
 }

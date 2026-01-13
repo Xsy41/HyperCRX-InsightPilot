@@ -1,50 +1,86 @@
 /**
  * Months with value of 0 are not listed in data file for size optimization
  * purpose, this function inserts those missing zeros.
- * @param originalData
- * @param updatedAt meta file last updated time
- * @returns
+ * @param originalData Object with keys like `2020-01`, `2020-02`, etc.
+ * @param updatedAt Meta file last updated time in milliseconds
+ * @returns Array of [month, value] pairs with missing months filled with 0
  */
-const generateDataByMonth = (originalData: any, updatedAt?: number) => {
-  if (originalData === null) {
+interface OriginalDataType {
+  [key: string]: number;
+}
+
+type MonthDataPair = [string, number];
+
+/**
+ * Check if a key is a normal month format (YYYY-MM)
+ * @param key The key to check
+ * @returns True if the key is in YYYY-MM format
+ */
+const isNormalMonth = (key: string): boolean => {
+  return /^\d{4}-\d{2}$/.test(key);
+};
+
+/**
+ * Generate month data with missing months filled with 0
+ * @param originalData Object with month keys and values
+ * @param updatedAt Optional timestamp for last update
+ * @returns Array of [month, value] pairs
+ */
+const generateDataByMonth = (
+  originalData: OriginalDataType | null | undefined,
+  updatedAt?: number
+): MonthDataPair[] => {
+  // Validate input
+  if (originalData === null || originalData === undefined) {
     return [];
   }
 
-  const isNormalMonth = (key: string): boolean => {
-    return key.match(/^\d{4}-\d{2}$/) !== null;
-  };
-  // `originalData` is an object with keys like `2020-01`, `2020-02`, `2022`, `2022-Q1`, `all`.
-  // A normal month is a key like `2020-01`(yyyy-mm). They are the keys we handle later in this function.
-  // An unnormal month is a key like `2020`, `2020-Q1`, `all`. They are not used in any feature yet.
-  const normalMonths = Object.keys(originalData).filter((key) => isNormalMonth(key));
-  const orderedMonths = normalMonths.sort((a, b) => {
-    const dateA = new Date(a);
-    const dateB = new Date(b);
-    if (dateA < dateB) return -1;
-    else if (dateA > dateB) return 1;
-    else return 0;
-  });
+  if (typeof originalData !== 'object' || Array.isArray(originalData)) {
+    throw new TypeError('originalData must be an object');
+  }
 
-  // get the last month that has data
+  if (updatedAt !== undefined && typeof updatedAt !== 'number') {
+    throw new TypeError('updatedAt must be a number');
+  }
+
+  // Filter and sort normal months (YYYY-MM format)
+  const normalMonths = Object.keys(originalData)
+    .filter(isNormalMonth)
+    .sort((a, b) => {
+      const dateA = new Date(a);
+      const dateB = new Date(b);
+      return dateA.getTime() - dateB.getTime();
+    });
+
+  // If no normal months found, return empty array
+  if (normalMonths.length === 0) {
+    return [];
+  }
+
+  // Get the last available month from updatedAt or current date
   const lastDataAvailableMonth = updatedAt ? new Date(updatedAt) : new Date();
+  // Set to last day of previous month to get correct month for newestMonth
   lastDataAvailableMonth.setDate(0);
 
-  const oldestMonth = orderedMonths[0];
-  const newestMonth =
-    lastDataAvailableMonth.getFullYear() + '-' + (lastDataAvailableMonth.getMonth() + 1).toString().padStart(2, '0');
-  // insert no-event months (assigned to 0) and generate final data
-  const arrayData: [string, number][] = [];
-  const start = new Date(oldestMonth);
-  const end = new Date(newestMonth);
-  for (let i = start; i <= end; i.setMonth(i.getMonth() + 1)) {
-    const date = i.getFullYear() + '-' + (i.getMonth() + 1).toString().padStart(2, '0');
-    if (!originalData.hasOwnProperty(date)) {
-      arrayData.push([date, 0]);
-    } else {
-      arrayData.push([date, originalData[date]]);
-    }
+  const oldestMonth = normalMonths[0];
+  const newestMonth = `${lastDataAvailableMonth.getFullYear()}-${(lastDataAvailableMonth.getMonth() + 1).toString().padStart(2, '0')}`;
+
+  // Generate array with all months between oldest and newest
+  const result: MonthDataPair[] = [];
+  const currentDate = new Date(oldestMonth);
+  const endDate = new Date(newestMonth);
+
+  // Loop through each month from oldest to newest
+  while (currentDate <= endDate) {
+    const monthKey = `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}`;
+    const value = originalData[monthKey] || 0;
+    result.push([monthKey, value]);
+
+    // Move to next month
+    currentDate.setMonth(currentDate.getMonth() + 1);
   }
-  return arrayData;
+
+  return result;
 };
 
 export default generateDataByMonth;

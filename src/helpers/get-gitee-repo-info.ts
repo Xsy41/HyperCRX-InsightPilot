@@ -1,6 +1,5 @@
 import { metaStore } from '../api/common';
 
-import $ from 'jquery';
 import * as pageDetect from 'github-url-detection';
 import { getPlatform } from './get-platform';
 import elementReady from 'element-ready';
@@ -27,8 +26,8 @@ export async function isRepoRoot() {
   return pathParts.length === 2 && parsedUrl.search === '';
 }
 export function hasRepoContainerHeader() {
-  const headerElement = $('#git-project-header-details');
-  return headerElement && !headerElement.attr('hidden');
+  const headerElement = document.querySelector('#git-project-header-details');
+  return headerElement && !headerElement.hasAttribute('hidden');
 }
 
 /**
@@ -39,7 +38,7 @@ export async function isPublicRepo() {
   if (!elements) {
     return false;
   }
-  return $(elements).text().trim() === '1';
+  return elements.textContent?.trim() === '1';
 }
 export async function isPublicRepoWithMeta() {
   const platform = getPlatform();
