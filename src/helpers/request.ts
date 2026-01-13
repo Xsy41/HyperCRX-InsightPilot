@@ -30,6 +30,14 @@ export interface RequestOptions extends Omit<RequestInit, 'method' | 'headers' |
   stringifyJsonBody?: boolean;
   /** AbortController signal for canceling requests */
   signal?: AbortSignal;
+  /** HTTP status codes that should trigger a retry (default: [500, 502, 503, 504, 429]) */
+  retryStatusCodes?: number[];
+  /** Default headers to include in all requests */
+  defaultHeaders?: Record<string, string>;
+  /** Function to run before the request is sent */
+  onBeforeRequest?: (config: RequestOptions) => void | Promise<void>;
+  /** Function to run after the request is complete */
+  onAfterRequest?: (response: Response, requestOptions: RequestOptions) => void | Promise<void>;
 }
 
 /**
@@ -67,6 +75,10 @@ export const request = async <T = any>(url: string, options: RequestOptions = {}
     responseType = 'json',
     stringifyJsonBody = true,
     signal,
+    retryStatusCodes = [500, 502, 503, 504, 429],
+    defaultHeaders = {},
+    onBeforeRequest,
+    onAfterRequest,
     ...restOptions
   } = options;
 
@@ -76,7 +88,8 @@ export const request = async <T = any>(url: string, options: RequestOptions = {}
 
   // Prepare request body
   let requestBody: BodyInit | undefined;
-  let requestHeaders = { ...headers };
+  // Merge default headers with request headers
+  let requestHeaders = { ...defaultHeaders, ...headers };
 
   if (body !== undefined && body !== null) {
     if (body instanceof FormData || body instanceof Blob || body instanceof ArrayBuffer || typeof body === 'string') {
@@ -127,9 +140,19 @@ export const request = async <T = any>(url: string, options: RequestOptions = {}
     try {
       attempt++;
 
+      // Run before request hook
+      if (onBeforeRequest) {
+        await onBeforeRequest(options);
+      }
+
       console.debug(`Request attempt ${attempt}/${retry + 1}: ${method} ${url}`);
 
       const response = await Promise.race([fetch(url, requestConfig), timeoutPromise(timeout)]);
+
+      // Run after request hook
+      if (onAfterRequest) {
+        await onAfterRequest(response, options);
+      }
 
       if (!response.ok) {
         const errorMessage = `HTTP error! status: ${response.status}, url: ${url}`;
@@ -138,6 +161,25 @@ export const request = async <T = any>(url: string, options: RequestOptions = {}
         error.url = url;
         error.method = method;
         error.retryAttempts = attempt - 1;
+
+        // Check if this status code should be retried
+        const shouldRetry = retryStatusCodes.includes(response.status);
+
+        if (shouldRetry && attempt <= retry) {
+          // Calculate exponential backoff with jitter
+          const backoffDelay = Math.min(
+            retryDelay * Math.pow(2, attempt - 1) + Math.random() * 100,
+            30000 // Cap at 30 seconds
+          );
+
+          console.debug(
+            `Request failed with status ${response.status}, retrying in ${Math.round(backoffDelay)}ms: ${method} ${url}`,
+            error
+          );
+          await new Promise((resolve) => setTimeout(resolve, backoffDelay));
+          continue;
+        }
+
         throw error;
       }
 
