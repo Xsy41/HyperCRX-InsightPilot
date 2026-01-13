@@ -62,7 +62,75 @@ export function isEmpty(value: unknown): boolean {
     return Object.keys(value).length === 0;
   }
 
+  // Check for other falsy values that might be considered "empty"
   return false;
+}
+
+/**
+ * Check if a string is empty or contains only whitespace
+ * @param value The string to check
+ * @returns Boolean indicating if the string is empty or whitespace-only
+ * @example
+ * ```ts
+ * isEmptyString(''); // true
+ * isEmptyString('   '); // true
+ * isEmptyString('hello'); // false
+ * isEmptyString(123); // false (not a string)
+ * ```
+ */
+export function isEmptyString(value: unknown): boolean {
+  return typeof value === 'string' && value.trim() === '';
+}
+
+/**
+ * Check if an array is empty or contains only null/undefined values
+ * @param value The array to check
+ * @param strict If true, only check if the array is empty; if false, also check for all null/undefined values
+ * @returns Boolean indicating if the array is empty or contains only null/undefined values
+ * @example
+ * ```ts
+ * isEmptyArray([]); // true
+ * isEmptyArray([null, undefined]); // true (with strict: false)
+ * isEmptyArray([null, undefined], true); // false
+ * isEmptyArray([1, 2, 3]); // false
+ * ```
+ */
+export function isEmptyArray(value: unknown, strict: boolean = false): boolean {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+
+  if (value.length === 0) {
+    return true;
+  }
+
+  return !strict && value.every(isNil);
+}
+
+/**
+ * Check if an object is empty or contains only null/undefined values
+ * @param value The object to check
+ * @param strict If true, only check if the object is empty; if false, also check for all null/undefined values
+ * @returns Boolean indicating if the object is empty or contains only null/undefined values
+ * @example
+ * ```ts
+ * isEmptyObject({}); // true
+ * isEmptyObject({ a: null, b: undefined }); // true (with strict: false)
+ * isEmptyObject({ a: null, b: undefined }, true); // false
+ * isEmptyObject({ a: 1, b: 2 }); // false
+ * ```
+ */
+export function isEmptyObject(value: unknown, strict: boolean = false): boolean {
+  if (typeof value !== 'object' || isNil(value) || value instanceof Map || value instanceof Set) {
+    return false;
+  }
+
+  const keys = Object.keys(value);
+  if (keys.length === 0) {
+    return true;
+  }
+
+  return !strict && keys.every((key) => isNil((value as Record<string, unknown>)[key]));
 }
 
 /**
@@ -147,4 +215,96 @@ export function isAllEmpty(obj: Record<string, unknown>): boolean {
  */
 export function isAllFalsy(obj: Record<string, unknown>): boolean {
   return Object.values(obj).every(isFalsy);
+}
+
+/**
+ * Check if a value is not empty
+ * @param value The value to check
+ * @returns Boolean indicating if the value is not empty
+ * @example
+ * ```ts
+ * isNotEmpty('hello'); // true
+ * isNotEmpty([]); // false
+ * isNotEmpty({}); // false
+ * ```
+ */
+export function isNotEmpty(value: unknown): boolean {
+  return !isEmpty(value);
+}
+
+/**
+ * Check if a value is blank (null, undefined, or whitespace-only string)
+ * @param value The value to check
+ * @returns Boolean indicating if the value is blank
+ * @example
+ * ```ts
+ * isBlank(null); // true
+ * isBlank('   '); // true
+ * isBlank('hello'); // false
+ * ```
+ */
+export function isBlank(value: unknown): boolean {
+  if (isNil(value)) {
+    return true;
+  }
+  return typeof value === 'string' && value.trim() === '';
+}
+
+/**
+ * Check if a value is not blank
+ * @param value The value to check
+ * @returns Boolean indicating if the value is not blank
+ * @example
+ * ```ts
+ * isNotBlank('hello'); // true
+ * isNotBlank('   '); // false
+ * isNotBlank(null); // false
+ * ```
+ */
+export function isNotBlank(value: unknown): boolean {
+  return !isBlank(value);
+}
+
+/**
+ * Check if an object has any non-null/non-undefined values
+ * @param obj The object to check
+ * @returns Boolean indicating if the object has any non-nil values
+ * @example
+ * ```ts
+ * hasValues({ a: null, b: 'value' }); // true
+ * hasValues({ a: null, b: undefined }); // false
+ * ```
+ */
+export function hasValues(obj: Record<string, unknown>): boolean {
+  return Object.values(obj).some((value) => !isNil(value));
+}
+
+/**
+ * Check if an object has any non-empty values
+ * @param obj The object to check
+ * @returns Boolean indicating if the object has any non-empty values
+ * @example
+ * ```ts
+ * hasNonEmptyValues({ a: '', b: 'value' }); // true
+ * hasNonEmptyValues({ a: '', b: [] }); // false
+ * ```
+ */
+export function hasNonEmptyValues(obj: Record<string, unknown>): boolean {
+  return Object.values(obj).some((value) => !isEmpty(value));
+}
+
+/**
+ * Check if a value is null, undefined, or empty
+ * @param value The value to check
+ * @returns Boolean indicating if the value is null, undefined, or empty
+ * @example
+ * ```ts
+ * isNullOrEmpty(null); // true
+ * isNullOrEmpty(''); // true
+ * isNullOrEmpty([]); // true
+ * isNullOrEmpty('hello'); // false
+ * ```
+ */
+export function isNullOrEmpty(value: unknown): boolean {
+  return isNil(value) || isEmpty(value);
 }
