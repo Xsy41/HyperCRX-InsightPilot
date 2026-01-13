@@ -24,18 +24,15 @@ export interface SIFormatOptions {
  * ```ts
  * // Format with default options
  * formatSI(1234); // "1.23k"
- * 
+ *
  * // Format with custom decimals
  * formatSI(1234, { decimals: 1 }); // "1.2k"
- * 
+ *
  * // Format without removing trailing zeros
  * formatSI(1000, { removeTrailingZeros: false }); // "1.00k"
  * ```
  */
-export const formatSI = (
-  num: number,
-  options: SIFormatOptions = {}
-): string => {
+export const formatSI = (num: number, options: SIFormatOptions = {}): string => {
   // Validate input
   if (typeof num !== 'number' || isNaN(num)) {
     return '0';
@@ -113,18 +110,15 @@ export interface CommaFormatOptions {
  * ```ts
  * // Format with default options
  * formatCommas(1234567); // "1,234,567"
- * 
+ *
  * // Format with decimals
  * formatCommas(1234.567, { decimals: 2 }); // "1,234.57"
- * 
+ *
  * // Format with trailing zeros
  * formatCommas(1000, { decimals: 2, showDecimalsWhenZero: true }); // "1,000.00"
  * ```
  */
-export const formatCommas = (
-  num: number,
-  options: CommaFormatOptions = {}
-): string => {
+export const formatCommas = (num: number, options: CommaFormatOptions = {}): string => {
   // Validate input
   if (typeof num !== 'number' || isNaN(num)) {
     return '0';
@@ -138,10 +132,10 @@ export const formatCommas = (
   }
 
   let formatted: string;
-  
+
   if (decimals > 0) {
     formatted = num.toFixed(decimals);
-    
+
     // Remove decimal part if all zeros and showDecimalsWhenZero is false
     if (!showDecimalsWhenZero) {
       const trailingZerosRegex = /\.0+$/;
@@ -166,10 +160,10 @@ export const formatCommas = (
  * ```ts
  * // Format with default options
  * formatPercentage(0.1234); // "12.34%"
- * 
+ *
  * // Format with custom decimals
  * formatPercentage(0.1234, { decimals: 1 }); // "12.3%"
- * 
+ *
  * // Format without symbol
  * formatPercentage(0.1234, { showSymbol: false }); // "12.34"
  * ```
@@ -181,10 +175,7 @@ export interface PercentageFormatOptions {
   showSymbol?: boolean;
 }
 
-export const formatPercentage = (
-  value: number,
-  options: PercentageFormatOptions = {}
-): string => {
+export const formatPercentage = (value: number, options: PercentageFormatOptions = {}): string => {
   // Validate input
   if (typeof value !== 'number' || isNaN(value)) {
     return '0%';
@@ -213,7 +204,7 @@ export const formatPercentage = (
  * ```ts
  * // Format with default decimals
  * formatFixed(123.456); // "123.46"
- * 
+ *
  * // Format with custom decimals
  * formatFixed(123.456, 1); // "123.5"
  * ```
@@ -244,10 +235,10 @@ export const formatFixed = (num: number, decimals: number = 2): string => {
  * ```ts
  * // Format with default options
  * formatCurrency(1234.56); // "$1,234.56"
- * 
+ *
  * // Format with custom currency
  * formatCurrency(1234.56, { currency: '€' }); // "€1,234.56"
- * 
+ *
  * // Format with symbol suffix
  * formatCurrency(1234.56, { symbolPosition: 'suffix' }); // "1,234.56$"
  * ```
@@ -263,21 +254,13 @@ export interface CurrencyFormatOptions {
   useCommas?: boolean;
 }
 
-export const formatCurrency = (
-  amount: number,
-  options: CurrencyFormatOptions = {}
-): string => {
+export const formatCurrency = (amount: number, options: CurrencyFormatOptions = {}): string => {
   // Validate input
   if (typeof amount !== 'number' || isNaN(amount)) {
     return '$0.00';
   }
 
-  const {
-    currency = '$',
-    decimals = 2,
-    symbolPosition = 'prefix',
-    useCommas = true,
-  } = options;
+  const { currency = '$', decimals = 2, symbolPosition = 'prefix', useCommas = true } = options;
 
   // Validate decimals
   if (typeof decimals !== 'number' || decimals < 0 || decimals > 10) {
@@ -286,7 +269,7 @@ export const formatCurrency = (
 
   // Format the amount with decimals
   const formattedAmount = amount.toFixed(decimals);
-  
+
   // Add comma separators if enabled
   let amountWithCommas = formattedAmount;
   if (useCommas) {
@@ -294,9 +277,7 @@ export const formatCurrency = (
   }
 
   // Add currency symbol
-  return symbolPosition === 'prefix' 
-    ? `${currency}${amountWithCommas}` 
-    : `${amountWithCommas}${currency}`;
+  return symbolPosition === 'prefix' ? `${currency}${amountWithCommas}` : `${amountWithCommas}${currency}`;
 };
 
 /**
