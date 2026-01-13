@@ -152,7 +152,9 @@ const generateEChartsData = (data: GraphRawData, focusedNodeID?: string): EChart
  * Handle node click event
  * @param params Click event parameters
  */
-const handleNodeClick = (params: any): void => {
+const handleNodeClick = (params: echarts.ECElementEvent): void => {
+  if (!params.data || !params.data.id) return;
+
   const id = params.data.id;
   let baseUrl = 'https://github.com/';
 
@@ -162,7 +164,7 @@ const handleNodeClick = (params: any): void => {
   }
 
   const url = baseUrl + id;
-  window.location.href = url;
+  window.open(url, '_blank', 'noopener,noreferrer');
 };
 
 /**
@@ -170,14 +172,25 @@ const handleNodeClick = (params: any): void => {
  */
 const Graph: React.FC<GraphProps> = ({ data, style = {}, focusedNodeID }) => {
   const divRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<echarts.ECharts | null>(null);
 
   // Generate ECharts data from raw data
   const graphData = useMemo(() => generateEChartsData(data, focusedNodeID), [data, focusedNodeID]);
 
+  // Check if graph has any data
+  const hasData = graphData.nodes.length > 0 || graphData.edges.length > 0;
+
   // ECharts option configuration
   const option = useMemo(
     () => ({
-      tooltip: {},
+      tooltip: {
+        formatter: (params: any) => {
+          if (!params.data) return '';
+
+          const { name, value } = params.data;
+          return `${name}: ${value}`;
+        },
+      },
       animation: true,
       animationDuration: 2000,
       series: [
@@ -190,6 +203,8 @@ const Graph: React.FC<GraphProps> = ({ data, style = {}, focusedNodeID }) => {
           roam: true,
           label: {
             position: 'right',
+            formatter: '{b}',
+            fontSize: 10,
           },
           force: {
             initLayout: 'circular',
@@ -202,12 +217,19 @@ const Graph: React.FC<GraphProps> = ({ data, style = {}, focusedNodeID }) => {
           lineStyle: {
             curveness: 0.3,
             opacity: 0.2,
+            width: 1,
           },
           emphasis: {
             focus: 'adjacency',
             label: {
               position: 'right',
               show: true,
+              fontSize: 12,
+              fontWeight: 'bold',
+            },
+            lineStyle: {
+              opacity: 0.6,
+              width: 2,
             },
           },
         },
@@ -216,48 +238,72 @@ const Graph: React.FC<GraphProps> = ({ data, style = {}, focusedNodeID }) => {
     [graphData]
   );
 
-  // Initialize ECharts instance
+  // Initialize and dispose ECharts instance
   useEffect(() => {
     const chartDOM = divRef.current;
     if (!chartDOM) return;
 
-    const instance = echarts.init(chartDOM);
+    try {
+      // Initialize chart instance
+      const instance = echarts.init(chartDOM);
+      chartRef.current = instance;
 
-    return () => {
-      instance.dispose();
-    };
+      return () => {
+        // Cleanup
+        instance.dispose();
+        chartRef.current = null;
+      };
+    } catch (error) {
+      console.error('Failed to initialize ECharts instance:', error);
+    }
   }, []);
 
   // Update chart when option changes
   useEffect(() => {
-    const chartDOM = divRef.current;
-    if (!chartDOM) return;
-
-    const instance = echarts.getInstanceByDom(chartDOM);
+    const instance = chartRef.current;
     if (!instance) return;
 
-    instance.setOption(option);
+    try {
+      instance.setOption(option, true);
 
-    // Add click event listener
-    instance.on('click', handleNodeClick);
+      // Add click event listener
+      instance.on('click', handleNodeClick);
 
-    // Add resize listener with debounce
-    const debouncedResize = debounce(() => {
-      instance.resize();
-    }, 500);
+      // Add resize listener with debounce
+      const debouncedResize = debounce(() => {
+        instance.resize();
+      }, 500);
 
-    window.addEventListener('resize', debouncedResize);
+      window.addEventListener('resize', debouncedResize);
 
-    // Cleanup event listeners
-    return () => {
-      instance.off('click', handleNodeClick);
-      window.removeEventListener('resize', debouncedResize);
-    };
+      // Cleanup event listeners
+      return () => {
+        instance.off('click', handleNodeClick);
+        window.removeEventListener('resize', debouncedResize);
+      };
+    } catch (error) {
+      console.error('Failed to update ECharts option:', error);
+    }
   }, [option]);
 
   return (
     <div className="hypertrons-crx-border">
-      <div ref={divRef} style={style}></div>
+      {hasData ? (
+        <div ref={divRef} style={style}></div>
+      ) : (
+        <div
+          style={{
+            ...style,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            color: '#666',
+            fontSize: '14px',
+          }}
+        >
+          No graph data available
+        </div>
+      )}
     </div>
   );
 };
