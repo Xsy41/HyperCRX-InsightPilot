@@ -29,12 +29,12 @@ export interface ChartInstance {
    * Get current chart configuration
    * @returns Current chart option object
    */
-  getOption(): ChartOption;
+  getOption(): any;
   /**
    * Update chart configuration
    * @param option Chart option object to update
    */
-  setOption(option: Partial<ChartOption>): void;
+  setOption(option: any): void;
 }
 
 /**
@@ -48,17 +48,6 @@ export interface ZoomParams {
 }
 
 /**
- * Chart option type with minimum required properties
- */
-export interface ChartOption {
-  xAxis?: Array<{
-    minInterval?: number;
-    [key: string]: any;
-  }>;
-  [key: string]: any;
-}
-
-/**
  * Interval result type
  */
 export interface IntervalResult {
@@ -69,27 +58,13 @@ export interface IntervalResult {
 }
 
 /**
- * Calculate time interval information from data
+ * Get time interval information from data
  * @param data Array of time data points
- * @returns Object containing time length and recommended minimum interval
- * @throws TypeError if input is invalid
- * @example
- * ```typescript
- * const data = [
- *   ['2020-01-01', 100],
- *   ['2021-01-01', 200],
- *   ['2022-01-01', 300],
- *   ['2023-01-01', 400]
- * ];
- * const { timeLength, minInterval } = getInterval(data);
- * // timeLength = 3 (years)
- * // minInterval = 31536000000 (1 year in ms)
- * ```
+ * @returns Object containing time length and minimum interval
  */
 export function getInterval(data: TimeDataPoint[]): IntervalResult {
-  // Input validation
   if (!Array.isArray(data) || data.length === 0) {
-    throw new TypeError('Data must be a non-empty array of time data points');
+    return { timeLength: 0, minInterval: MS_IN_MONTH };
   }
 
   try {
@@ -101,27 +76,22 @@ export function getInterval(data: TimeDataPoint[]): IntervalResult {
     }
 
     // Extract year from the first and last data points
-    const firstDate = data[0][0];
-    const lastDate = data[data.length - 1][0];
-
-    const startYear = Number(firstDate.split('-')[0]);
-    const endYear = Number(lastDate.split('-')[0]);
+    const startTime = Number(data[0][0].split('-')[0]);
+    const endTime = Number(data[data.length - 1][0].split('-')[0]);
+    const timeLength = endTime - startTime;
 
     // Validate year values
-    if (isNaN(startYear) || isNaN(endYear)) {
+    if (isNaN(startTime) || isNaN(endTime)) {
       throw new Error('Invalid date format. Expected YYYY-MM-DD');
     }
 
-    const timeLength = endYear - startYear;
-
     // Determine minimum interval based on time length
-    // Use yearly interval for data spanning more than 2 years, monthly otherwise
     const minInterval = timeLength > 2 ? MS_IN_YEAR : MS_IN_MONTH;
 
     return { timeLength, minInterval };
   } catch (error) {
     console.error('Error calculating interval:', error instanceof Error ? error.message : String(error));
-    throw error;
+    return { timeLength: 0, minInterval: MS_IN_MONTH };
   }
 }
 
@@ -129,13 +99,6 @@ export function getInterval(data: TimeDataPoint[]): IntervalResult {
  * Set appropriate axis interval for chart based on time length and handle zoom events
  * @param instance Chart instance to configure
  * @param timeLength Time span in years
- * @throws TypeError if input is invalid
- * @example
- * ```typescript
- * const chartInstance = getChartInstance(); // Your chart instance
- * const { timeLength } = getInterval(data);
- * judgeInterval(chartInstance, timeLength);
- * ```
  */
 export function judgeInterval(instance: ChartInstance, timeLength: number): void {
   // Input validation for chart instance
@@ -146,12 +109,14 @@ export function judgeInterval(instance: ChartInstance, timeLength: number): void
     typeof instance.getOption !== 'function' ||
     typeof instance.setOption !== 'function'
   ) {
-    throw new TypeError('Invalid chart instance. Must have on, getOption, and setOption methods');
+    console.error('Invalid chart instance. Must have on, getOption, and setOption methods');
+    return;
   }
 
   // Input validation for timeLength
   if (typeof timeLength !== 'number' || isNaN(timeLength) || timeLength < 0) {
-    throw new TypeError('timeLength must be a non-negative number');
+    console.error('timeLength must be a non-negative number');
+    return;
   }
 
   // Only apply special handling for long time periods (more than 2 years)
@@ -163,14 +128,7 @@ export function judgeInterval(instance: ChartInstance, timeLength: number): void
   instance.on('dataZoom', (params: ZoomParams) => {
     try {
       const chartOption = instance.getOption();
-      if (!chartOption || typeof chartOption !== 'object') {
-        console.error('Invalid chart option returned from getOption');
-        return;
-      }
-
-      const xAxis = chartOption.xAxis;
-      if (!Array.isArray(xAxis) || xAxis.length === 0) {
-        console.error('No xAxis configuration found in chart options');
+      if (!chartOption || !chartOption.xAxis || !chartOption.xAxis[0]) {
         return;
       }
 
@@ -189,22 +147,16 @@ export function judgeInterval(instance: ChartInstance, timeLength: number): void
       }
 
       // Determine appropriate interval based on zoom level
-      // Use yearly interval when fully zoomed out, monthly otherwise
       const minInterval = startValue === 0 && endValue === 100 ? MS_IN_YEAR : MS_IN_MONTH;
 
       // Only update if interval has changed
-      if (xAxis[0].minInterval === minInterval) {
+      if (chartOption.xAxis[0].minInterval === minInterval) {
         return;
       }
 
       // Update chart with new interval
-      instance.setOption({
-        xAxis: [
-          {
-            minInterval,
-          },
-        ],
-      });
+      chartOption.xAxis[0].minInterval = minInterval;
+      instance.setOption(chartOption);
     } catch (error) {
       console.error('Error handling dataZoom event:', error instanceof Error ? error.message : String(error));
     }
