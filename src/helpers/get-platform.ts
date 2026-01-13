@@ -4,8 +4,8 @@
  * Provides functions to detect the current platform (GitHub, Gitee, or unknown)
  */
 
-import { isAnyGithubDomain, resetGithubCache } from './is-github';
-import { isAnyGiteeDomain, resetGiteeCache } from './is-gitee';
+import { isAnyGithubDomain, isGithubUrl, resetGithubCache } from './is-github';
+import { isAnyGiteeDomain, isGiteeUrl, resetGiteeCache } from './is-gitee';
 
 /**
  * Supported platform types
@@ -18,12 +18,25 @@ export type PlatformType = 'github' | 'gitee' | 'unknown';
 export const ALL_PLATFORMS: PlatformType[] = ['github', 'gitee', 'unknown'];
 
 /**
+ * Cached result interface with timestamp for cache expiration
+ */
+interface CachedPlatformResult {
+  value: PlatformType;
+  timestamp: number;
+}
+
+/**
  * Cache the platform result for better performance
  */
-let cachedPlatform: PlatformType | null = null;
+let cachedPlatform: CachedPlatformResult | null = null;
+
+/** Cache expiration time in milliseconds (5 minutes) */
+const CACHE_EXPIRY = 5 * 60 * 1000;
 
 /**
  * Get the current platform type
+ * @param options Configuration options
+ * @param options.includeEnterprise Whether to include enterprise domains
  * @returns Platform type (github, gitee, or unknown)
  * @example
  * ```ts
@@ -41,12 +54,17 @@ let cachedPlatform: PlatformType | null = null;
  *   default:
  *     // Handle unknown platform
  * }
+ *
+ * // Get current platform including enterprise domains
+ * const platform = getPlatform({ includeEnterprise: true });
  * ```
  */
-export const getPlatform = (): PlatformType => {
-  // Return cached result if available
-  if (cachedPlatform !== null) {
-    return cachedPlatform;
+export const getPlatform = (options: { includeEnterprise?: boolean } = {}): PlatformType => {
+  const { includeEnterprise = false } = options;
+
+  // Check if cache is valid
+  if (cachedPlatform && Date.now() - cachedPlatform.timestamp < CACHE_EXPIRY) {
+    return cachedPlatform.value;
   }
 
   try {
@@ -54,14 +72,17 @@ export const getPlatform = (): PlatformType => {
     // Using isAnyGithubDomain and isAnyGiteeDomain for more comprehensive detection
     let platform: PlatformType = 'unknown';
 
-    if (isAnyGithubDomain()) {
+    if (isAnyGithubDomain({ includeEnterprise })) {
       platform = 'github';
-    } else if (isAnyGiteeDomain()) {
+    } else if (isAnyGiteeDomain({ includeEnterprise })) {
       platform = 'gitee';
     }
 
     // Cache the result for future calls
-    cachedPlatform = platform;
+    cachedPlatform = {
+      value: platform,
+      timestamp: Date.now(),
+    };
     return platform;
   } catch (error) {
     console.error('Error detecting platform:', error instanceof Error ? error.message : String(error));
@@ -71,6 +92,8 @@ export const getPlatform = (): PlatformType => {
 
 /**
  * Check if current platform is GitHub
+ * @param options Configuration options
+ * @param options.includeEnterprise Whether to include enterprise domains
  * @returns True if current platform is GitHub, false otherwise
  * @example
  * ```ts
@@ -78,14 +101,21 @@ export const getPlatform = (): PlatformType => {
  * if (isGitHubPlatform()) {
  *   // Render GitHub-specific content
  * }
+ *
+ * // Check if current platform is GitHub Enterprise
+ * if (isGitHubPlatform({ includeEnterprise: true })) {
+ *   // Render GitHub Enterprise-specific content
+ * }
  * ```
  */
-export const isGitHubPlatform = (): boolean => {
-  return getPlatform() === 'github';
+export const isGitHubPlatform = (options: { includeEnterprise?: boolean } = {}): boolean => {
+  return getPlatform(options) === 'github';
 };
 
 /**
  * Check if current platform is Gitee
+ * @param options Configuration options
+ * @param options.includeEnterprise Whether to include enterprise domains
  * @returns True if current platform is Gitee, false otherwise
  * @example
  * ```ts
@@ -93,14 +123,21 @@ export const isGitHubPlatform = (): boolean => {
  * if (isGiteePlatform()) {
  *   // Render Gitee-specific content
  * }
+ *
+ * // Check if current platform is Gitee Enterprise
+ * if (isGiteePlatform({ includeEnterprise: true })) {
+ *   // Render Gitee Enterprise-specific content
+ * }
  * ```
  */
-export const isGiteePlatform = (): boolean => {
-  return getPlatform() === 'gitee';
+export const isGiteePlatform = (options: { includeEnterprise?: boolean } = {}): boolean => {
+  return getPlatform(options) === 'gitee';
 };
 
 /**
  * Check if current platform is unknown
+ * @param options Configuration options
+ * @param options.includeEnterprise Whether to include enterprise domains
  * @returns True if current platform is unknown, false otherwise
  * @example
  * ```ts
@@ -110,12 +147,14 @@ export const isGiteePlatform = (): boolean => {
  * }
  * ```
  */
-export const isUnknownPlatform = (): boolean => {
-  return getPlatform() === 'unknown';
+export const isUnknownPlatform = (options: { includeEnterprise?: boolean } = {}): boolean => {
+  return getPlatform(options) === 'unknown';
 };
 
 /**
  * Check if current platform is supported (GitHub or Gitee)
+ * @param options Configuration options
+ * @param options.includeEnterprise Whether to include enterprise domains
  * @returns True if current platform is supported, false otherwise
  * @example
  * ```ts
@@ -127,8 +166,8 @@ export const isUnknownPlatform = (): boolean => {
  * }
  * ```
  */
-export const isSupportedPlatform = (): boolean => {
-  const platform = getPlatform();
+export const isSupportedPlatform = (options: { includeEnterprise?: boolean } = {}): boolean => {
+  const platform = getPlatform(options);
   return platform === 'github' || platform === 'gitee';
 };
 
@@ -136,6 +175,8 @@ export const isSupportedPlatform = (): boolean => {
  * Get a platform-specific value based on the current platform
  * @param values An object mapping platform types to values
  * @param defaultValue Default value to return if platform is unknown
+ * @param options Configuration options
+ * @param options.includeEnterprise Whether to include enterprise domains
  * @returns The value for the current platform or the default value
  * @example
  * ```ts
@@ -146,8 +187,12 @@ export const isSupportedPlatform = (): boolean => {
  * }, 'https://default-api.com');
  * ```
  */
-export const getPlatformValue = <T>(values: Partial<Record<PlatformType, T>>, defaultValue: T): T => {
-  const platform = getPlatform();
+export const getPlatformValue = <T>(
+  values: Partial<Record<PlatformType, T>>,
+  defaultValue: T,
+  options: { includeEnterprise?: boolean } = {}
+): T => {
+  const platform = getPlatform(options);
   return values[platform] ?? defaultValue;
 };
 
@@ -171,6 +216,8 @@ export const resetPlatformCache = (): void => {
 /**
  * Check if a given URL belongs to any supported platform
  * @param url The URL to check
+ * @param options Configuration options
+ * @param options.includeEnterprise Whether to include enterprise domains
  * @returns Platform type if the URL belongs to a supported platform, unknown otherwise
  * @example
  * ```ts
@@ -178,16 +225,18 @@ export const resetPlatformCache = (): void => {
  * const platform = getPlatformFromUrl('https://github.com/hypertrons/hypertrons-crx'); // 'github'
  * const platform = getPlatformFromUrl('https://gitee.com'); // 'gitee'
  * const platform = getPlatformFromUrl('https://example.com'); // 'unknown'
+ *
+ * // Check platform of a URL including enterprise domains
+ * const platform = getPlatformFromUrl('https://github.example.com', { includeEnterprise: true }); // 'github'
  * ```
  */
-export const getPlatformFromUrl = (url: string): PlatformType => {
-  try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname;
+export const getPlatformFromUrl = (url: string, options: { includeEnterprise?: boolean } = {}): PlatformType => {
+  const { includeEnterprise = false } = options;
 
-    if (hostname === 'github.com' || hostname === 'www.github.com') {
+  try {
+    if (isGithubUrl(url, { includeEnterprise })) {
       return 'github';
-    } else if (hostname === 'gitee.com' || hostname === 'www.gitee.com') {
+    } else if (isGiteeUrl(url, { includeEnterprise })) {
       return 'gitee';
     }
     return 'unknown';
@@ -195,4 +244,75 @@ export const getPlatformFromUrl = (url: string): PlatformType => {
     console.error('Error detecting platform from URL:', error instanceof Error ? error.message : String(error));
     return 'unknown';
   }
+};
+
+/**
+ * Execute a function based on the current platform
+ * @param handlers An object mapping platform types to functions
+ * @param options Configuration options
+ * @param options.includeEnterprise Whether to include enterprise domains
+ * @returns The result of the executed function or undefined if no handler matches
+ * @example
+ * ```ts
+ * // Execute platform-specific function
+ * executePlatformFunction({
+ *   github: () => {
+ *     console.log('Running on GitHub');
+ *     return 'github-result';
+ *   },
+ *   gitee: () => {
+ *     console.log('Running on Gitee');
+ *     return 'gitee-result';
+ *   },
+ *   unknown: () => {
+ *     console.log('Running on unknown platform');
+ *     return 'unknown-result';
+ *   }
+ * });
+ * ```
+ */
+export const executePlatformFunction = <T>(
+  handlers: Partial<Record<PlatformType, () => T>>,
+  options: { includeEnterprise?: boolean } = {}
+): T | undefined => {
+  const platform = getPlatform(options);
+  const handler = handlers[platform];
+  return handler ? handler() : undefined;
+};
+
+/**
+ * Get platform display name for UI purposes
+ * @param platform Platform type
+ * @returns Human-readable platform name
+ * @example
+ * ```ts
+ * // Get platform display name
+ * const displayName = getPlatformDisplayName('github'); // 'GitHub'
+ * const displayName = getPlatformDisplayName('gitee'); // 'Gitee'
+ * const displayName = getPlatformDisplayName('unknown'); // 'Unknown'
+ * ```
+ */
+export const getPlatformDisplayName = (platform: PlatformType): string => {
+  const names: Record<PlatformType, string> = {
+    github: 'GitHub',
+    gitee: 'Gitee',
+    unknown: 'Unknown',
+  };
+  return names[platform];
+};
+
+/**
+ * Check if two platforms are the same
+ * @param platform1 First platform type
+ * @param platform2 Second platform type
+ * @returns True if platforms are the same, false otherwise
+ * @example
+ * ```ts
+ * // Check if two platforms are the same
+ * const isSame = isSamePlatform('github', 'github'); // true
+ * const isSame = isSamePlatform('github', 'gitee'); // false
+ * ```
+ */
+export const isSamePlatform = (platform1: PlatformType, platform2: PlatformType): boolean => {
+  return platform1 === platform2;
 };
