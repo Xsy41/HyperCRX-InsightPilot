@@ -1,22 +1,41 @@
 /**
  * Time constants in milliseconds
  */
-const MS_IN_DAY = 24 * 3600 * 1000;
-const MS_IN_MONTH = 30 * MS_IN_DAY;
-const MS_IN_YEAR = 365 * MS_IN_DAY;
+export const MS_IN_DAY = 24 * 3600 * 1000;
+export const MS_IN_MONTH = 30 * MS_IN_DAY;
+export const MS_IN_YEAR = 365 * MS_IN_DAY;
 
 /**
  * Time data point type
  */
-type TimeDataPoint = [string, number];
+export type TimeDataPoint = [string, number];
 
 /**
  * Chart instance type with minimum required methods
  */
-interface ChartInstance {
+export interface ChartInstance {
   on(event: string, callback: (params: any) => void): void;
   getOption(): any;
   setOption(option: any): void;
+}
+
+/**
+ * Zoom params type
+ */
+export interface ZoomParams {
+  batch?: Array<{
+    start: number;
+    end: number;
+  }>;
+}
+
+/**
+ * Chart option type with minimum required properties
+ */
+export interface ChartOption {
+  xAxis?: Array<{
+    minInterval?: number;
+  }>;
 }
 
 /**
@@ -25,19 +44,41 @@ interface ChartInstance {
  * @returns Object containing time length and minimum interval
  */
 export function getInterval(data: TimeDataPoint[]): { timeLength: number; minInterval: number } {
-  if (!data || data.length === 0) {
+  // Input validation
+  if (!Array.isArray(data) || data.length === 0) {
     return { timeLength: 0, minInterval: MS_IN_MONTH };
   }
 
-  // Extract year from the first and last data points
-  const startTime = Number(data[0][0].split('-')[0]);
-  const endTime = Number(data[data.length - 1][0].split('-')[0]);
-  const timeLength = endTime - startTime;
+  try {
+    // Validate data format
+    for (const [dateStr, value] of data) {
+      if (typeof dateStr !== 'string' || typeof value !== 'number') {
+        throw new Error('Invalid data point format');
+      }
+    }
 
-  // Determine minimum interval based on time length
-  const minInterval = timeLength > 2 ? MS_IN_YEAR : MS_IN_MONTH;
+    // Extract year from the first and last data points
+    const firstDate = data[0][0];
+    const lastDate = data[data.length - 1][0];
 
-  return { timeLength, minInterval };
+    const startYear = Number(firstDate.split('-')[0]);
+    const endYear = Number(lastDate.split('-')[0]);
+
+    // Validate year values
+    if (isNaN(startYear) || isNaN(endYear)) {
+      throw new Error('Invalid date format');
+    }
+
+    const timeLength = endYear - startYear;
+
+    // Determine minimum interval based on time length
+    const minInterval = timeLength > 2 ? MS_IN_YEAR : MS_IN_MONTH;
+
+    return { timeLength, minInterval };
+  } catch (error) {
+    console.error('Error calculating interval:', error);
+    return { timeLength: 0, minInterval: MS_IN_MONTH };
+  }
 }
 
 /**
@@ -46,22 +87,59 @@ export function getInterval(data: TimeDataPoint[]): { timeLength: number; minInt
  * @param timeLength Time length in years
  */
 export function judgeInterval(instance: ChartInstance, timeLength: number): void {
+  // Input validation
+  if (
+    !instance ||
+    typeof instance.on !== 'function' ||
+    typeof instance.getOption !== 'function' ||
+    typeof instance.setOption !== 'function'
+  ) {
+    console.error('Invalid chart instance');
+    return;
+  }
+
+  if (typeof timeLength !== 'number' || isNaN(timeLength)) {
+    console.error('Invalid time length');
+    return;
+  }
+
   if (timeLength > 2) {
-    instance.on('dataZoom', (params: any) => {
-      const chartOption = instance.getOption();
-      if (!chartOption || !chartOption.xAxis || !chartOption.xAxis[0]) {
-        return;
+    instance.on('dataZoom', (params: ZoomParams) => {
+      try {
+        const chartOption = instance.getOption();
+        if (!chartOption || typeof chartOption !== 'object') {
+          return;
+        }
+
+        const xAxis = (chartOption as ChartOption).xAxis;
+        if (!Array.isArray(xAxis) || xAxis.length === 0) {
+          return;
+        }
+
+        const batch = params.batch;
+        const startValue = batch?.[0]?.start;
+        const endValue = batch?.[0]?.end;
+
+        // Set minimum interval based on zoom level
+        // If fully zoomed out (0-100), use yearly interval, otherwise use monthly interval
+        const minInterval = startValue === 0 && endValue === 100 ? MS_IN_YEAR : MS_IN_MONTH;
+
+        // Update chart option
+        const updatedOption = {
+          ...chartOption,
+          xAxis: [
+            {
+              ...xAxis[0],
+              minInterval,
+            },
+            ...xAxis.slice(1),
+          ],
+        };
+
+        instance.setOption(updatedOption);
+      } catch (error) {
+        console.error('Error handling dataZoom event:', error);
       }
-
-      const startValue = params.batch?.[0]?.start;
-      const endValue = params.batch?.[0]?.end;
-
-      // Set minimum interval based on zoom level
-      // If fully zoomed out (0-100), use yearly interval, otherwise use monthly interval
-      const minInterval = startValue === 0 && endValue === 100 ? MS_IN_YEAR : MS_IN_MONTH;
-
-      chartOption.xAxis[0].minInterval = minInterval;
-      instance.setOption(chartOption);
     });
   }
 }
