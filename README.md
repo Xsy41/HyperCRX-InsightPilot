@@ -33,7 +33,7 @@ HyperCRX-InsightPilot 是一款面向 GitHub / Gitee 的智能浏览器扩展，
 - 自动导出 Markdown，可直接用于 README、会议文档或团队平台
 - 内置 **HyperEval** 自评估框架：检测幻觉、逻辑冲突、数据异常，提高报告可信度
 
-###  **4. 自然语言问答（ChatOps for Open Source）**
+### **4. 自然语言问答（ChatOps for Open Source）**
 
 系统支持针对仓库进行自然语言提问，例如：
 

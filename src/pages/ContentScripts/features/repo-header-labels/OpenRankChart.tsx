@@ -136,7 +136,7 @@ const OpenRankChart = (props: OpenRankChartProps): JSX.Element => {
     let chartDOM = divEL.current;
     const instance = echarts.getInstanceByDom(chartDOM as any);
     if (instance) {
-      judgeInterval(instance, timeLength);
+      judgeInterval(instance, option, timeLength);
       instance.setOption(option);
     }
   }, []);
