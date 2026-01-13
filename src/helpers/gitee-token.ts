@@ -1,6 +1,8 @@
 /**
  * Gitee token management utilities
  * Handles storage, retrieval, and automatic refresh of Gitee access tokens
+ * @zh-CN Gitee令牌管理工具
+ *        处理Gitee访问令牌的存储、检索和自动刷新
  */
 
 /** Key for storing Gitee token in chrome storage */
@@ -13,7 +15,13 @@ const GITEE_REFRESH_TOKEN_URL = 'https://gitee.com/oauth/token';
 const REQUEST_TIMEOUT = 10000;
 
 /** Default retry attempts for token refresh */
-const MAX_REFRESH_RETRIES = 2;
+const MAX_REFRESH_RETRIES = 3;
+
+/** Default retry delay in milliseconds */
+const DEFAULT_RETRY_DELAY = 1000;
+
+/** Token change callback type */
+export type GiteeTokenChangeCallback = (token: string | null) => void;
 
 /** Gitee token information interface */
 export interface GiteeTokenInfo {
@@ -23,6 +31,10 @@ export interface GiteeTokenInfo {
   expireAt: number;
   /** Refresh token for obtaining new access tokens */
   refreshToken: string;
+  /** Token scope information */
+  scope?: string;
+  /** Token type (e.g., "bearer") */
+  tokenType?: string;
 }
 
 /** Gitee token refresh response interface */
@@ -47,6 +59,9 @@ let isRefreshing = false;
 
 /** Queue of promises waiting for token refresh to complete */
 let refreshPromise: Promise<string | null> | null = null;
+
+/** Token change listeners */
+let tokenChangeListeners: GiteeTokenChangeCallback[] = [];
 
 /**
  * Check if a value is a valid non-empty string
@@ -96,7 +111,21 @@ const fetchWithTimeout = async (
 };
 
 /**
- * Refresh Gitee token with retry logic
+ * Notify all token change listeners
+ * @param token New token value
+ */
+const notifyTokenChangeListeners = (token: string | null): void => {
+  tokenChangeListeners.forEach((listener) => {
+    try {
+      listener(token);
+    } catch (error) {
+      console.error('Error in Gitee token change listener:', error);
+    }
+  });
+};
+
+/**
+ * Refresh Gitee token with retry logic and improved error handling
  * @param refreshToken Current refresh token
  * @param retryCount Current retry attempt count
  * @returns Promise resolving to new access token or null if refresh failed
@@ -104,6 +133,8 @@ const fetchWithTimeout = async (
 const refreshGiteeToken = async (refreshToken: string, retryCount: number = 0): Promise<string | null> => {
   if (retryCount >= MAX_REFRESH_RETRIES) {
     console.error(`Gitee token refresh failed after ${MAX_REFRESH_RETRIES} attempts`);
+    // Remove token if refresh failed after max retries
+    await removeGiteeToken();
     return null;
   }
 
@@ -127,11 +158,15 @@ const refreshGiteeToken = async (refreshToken: string, retryCount: number = 0): 
       const errorText = await refreshReq.text().catch(() => refreshReq.statusText);
       console.error(`Gitee token refresh request failed (${refreshReq.status}): ${errorText}`);
 
-      // Retry if it's a server error or timeout
+      // Retry only on server errors (5xx) with exponential backoff
       if ([500, 502, 503, 504].includes(refreshReq.status)) {
-        await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, retryCount))); // Exponential backoff
+        const backoffDelay = DEFAULT_RETRY_DELAY * Math.pow(2, retryCount) + Math.random() * 500;
+        await new Promise((resolve) => setTimeout(resolve, backoffDelay));
         return refreshGiteeToken(refreshToken, retryCount + 1);
       }
+
+      // For client errors (4xx), remove token since refresh is impossible
+      await removeGiteeToken();
       return null;
     }
 
@@ -139,14 +174,18 @@ const refreshGiteeToken = async (refreshToken: string, retryCount: number = 0): 
 
     if (!refreshData || !isValidString(refreshData.access_token)) {
       console.error('Gitee token refresh response invalid:', refreshData);
+      await removeGiteeToken();
       return null;
     }
 
-    // Calculate safe expiration time (subtract 2 minutes buffer)
+    // Calculate safe expiration time (subtract 2 minutes buffer to avoid edge cases)
     const safeExpireTime = Date.now() + (refreshData.expires_in - 120) * 1000;
 
-    // Save new token information
-    await saveGiteeToken(refreshData.access_token, safeExpireTime, refreshData.refresh_token);
+    // Save new token information with additional details
+    await saveGiteeToken(refreshData.access_token, safeExpireTime, refreshData.refresh_token, {
+      scope: refreshData.scope,
+      tokenType: refreshData.token_type,
+    });
 
     return refreshData.access_token;
   } catch (error) {
@@ -155,12 +194,18 @@ const refreshGiteeToken = async (refreshToken: string, retryCount: number = 0): 
       error instanceof Error ? error.message : String(error)
     );
 
-    // Retry on network errors or timeouts
-    if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TypeError')) {
-      await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, retryCount))); // Exponential backoff
+    // Retry on network errors, timeouts, or abort errors
+    if (
+      error instanceof Error &&
+      (error.name === 'AbortError' || error.name === 'TypeError' || error.message.includes('NetworkError'))
+    ) {
+      const backoffDelay = DEFAULT_RETRY_DELAY * Math.pow(2, retryCount) + Math.random() * 500;
+      await new Promise((resolve) => setTimeout(resolve, backoffDelay));
       return refreshGiteeToken(refreshToken, retryCount + 1);
     }
 
+    // For other errors, remove token and return null
+    await removeGiteeToken();
     return null;
   }
 };
@@ -170,10 +215,16 @@ const refreshGiteeToken = async (refreshToken: string, retryCount: number = 0): 
  * @param token Access token
  * @param expireAt Token expiration timestamp in milliseconds
  * @param refreshToken Refresh token
+ * @param additionalInfo Additional token information
  * @returns Promise resolving when token is saved
  * @throws TypeError if parameters are invalid
  */
-export const saveGiteeToken = async (token: string, expireAt: number, refreshToken: string): Promise<void> => {
+export const saveGiteeToken = async (
+  token: string,
+  expireAt: number,
+  refreshToken: string,
+  additionalInfo: { scope?: string; tokenType?: string } = {}
+): Promise<void> => {
   // Validate input parameters
   if (!isValidString(token)) {
     throw new TypeError('Invalid token: must be a non-empty string');
@@ -191,6 +242,8 @@ export const saveGiteeToken = async (token: string, expireAt: number, refreshTok
     token,
     expireAt,
     refreshToken,
+    scope: additionalInfo.scope,
+    tokenType: additionalInfo.tokenType,
   };
 
   try {
@@ -199,7 +252,11 @@ export const saveGiteeToken = async (token: string, expireAt: number, refreshTok
     });
 
     // Update cache
+    const oldToken = cachedTokenInfo?.token || null;
     cachedTokenInfo = tokenInfo;
+
+    // Notify listeners if token changed
+    notifyTokenChangeListeners(token);
   } catch (error) {
     console.error('Error saving Gitee token to storage:', error instanceof Error ? error.message : String(error));
     throw error;
@@ -219,11 +276,11 @@ export const getGiteeToken = async (): Promise<string | null> => {
 
     // Check cache first
     if (cachedTokenInfo) {
-      // Check if cached token is still valid
-      if (cachedTokenInfo.expireAt > Date.now()) {
+      // Check if cached token is still valid with a 5-second buffer
+      if (cachedTokenInfo.expireAt > Date.now() + 5000) {
         return cachedTokenInfo.token;
       }
-      // Token expired, clear cache
+      // Token is about to expire or already expired, clear cache
       cachedTokenInfo = null;
     }
 
@@ -242,17 +299,18 @@ export const getGiteeToken = async (): Promise<string | null> => {
       !isValidString(tokenInfo.refreshToken)
     ) {
       console.error('Invalid Gitee token info in storage:', tokenInfo);
+      await removeGiteeToken();
       return null;
     }
 
-    // Check if token is expired
-    if (tokenInfo.expireAt > Date.now()) {
+    // Check if token is expired or about to expire (within 5 seconds)
+    if (tokenInfo.expireAt > Date.now() + 5000) {
       // Update cache and return
       cachedTokenInfo = tokenInfo;
       return tokenInfo.token;
     }
 
-    console.log('Gitee token expired, refreshing...');
+    console.log('Gitee token expired or about to expire, refreshing...');
 
     // Set refresh in progress flag
     isRefreshing = true;
@@ -280,9 +338,17 @@ export const getGiteeToken = async (): Promise<string | null> => {
  */
 export const removeGiteeToken = async (): Promise<void> => {
   try {
+    const oldToken = cachedTokenInfo?.token || null;
+
     await chrome.storage.sync.remove(GITEE_TOKEN_KEY);
+
     // Clear cache
     cachedTokenInfo = null;
+
+    // Notify listeners if token was removed
+    if (oldToken !== null) {
+      notifyTokenChangeListeners(null);
+    }
   } catch (error) {
     console.error('Error removing Gitee token:', error instanceof Error ? error.message : String(error));
     throw error;
@@ -315,6 +381,7 @@ export const getGiteeTokenInfo = async (): Promise<GiteeTokenInfo | null> => {
       !isValidString(tokenInfo.refreshToken)
     ) {
       console.error('Invalid Gitee token info in storage:', tokenInfo);
+      await removeGiteeToken();
       return null;
     }
 
@@ -328,9 +395,83 @@ export const getGiteeTokenInfo = async (): Promise<GiteeTokenInfo | null> => {
 };
 
 /**
+ * Check if Gitee token exists and is valid
+ * @returns Promise resolving to true if token exists and is valid, false otherwise
+ */
+export const hasValidGiteeToken = async (): Promise<boolean> => {
+  const token = await getGiteeToken();
+  return token !== null;
+};
+
+/**
+ * Check if Gitee token is expired
+ * @returns Promise resolving to true if token is expired, false otherwise
+ */
+export const isGiteeTokenExpired = async (): Promise<boolean> => {
+  try {
+    // Check cache first
+    if (cachedTokenInfo) {
+      return cachedTokenInfo.expireAt <= Date.now();
+    }
+
+    // Read from storage
+    const result = await chrome.storage.sync.get(GITEE_TOKEN_KEY);
+    const tokenInfo = result[GITEE_TOKEN_KEY] as GiteeTokenInfo;
+
+    if (!tokenInfo) {
+      return true;
+    }
+
+    // Validate token info structure
+    if (
+      !isValidString(tokenInfo.token) ||
+      !isValidTimestamp(tokenInfo.expireAt) ||
+      !isValidString(tokenInfo.refreshToken)
+    ) {
+      return true;
+    }
+
+    return tokenInfo.expireAt <= Date.now();
+  } catch (error) {
+    console.error('Error checking Gitee token expiration:', error instanceof Error ? error.message : String(error));
+    return true;
+  }
+};
+
+/**
+ * Add a Gitee token change listener
+ * @param callback Function to call when token changes
+ * @returns Function to remove the listener
+ */
+export const addGiteeTokenChangeListener = (callback: GiteeTokenChangeCallback): (() => void) => {
+  tokenChangeListeners.push(callback);
+
+  // Return cleanup function
+  return () => {
+    tokenChangeListeners = tokenChangeListeners.filter((listener) => listener !== callback);
+  };
+};
+
+/**
+ * Clear all Gitee token change listeners
+ */
+export const clearGiteeTokenChangeListeners = (): void => {
+  tokenChangeListeners = [];
+};
+
+/**
  * Clear cached token information
  * Useful for testing or when manual refresh is needed
  */
 export const clearTokenCache = (): void => {
+  const oldToken = cachedTokenInfo?.token || null;
   cachedTokenInfo = null;
+
+  // Notify listeners if token was cleared from cache
+  if (oldToken !== null) {
+    // Get fresh token from storage to notify listeners
+    getGiteeToken().then((newToken) => {
+      notifyTokenChangeListeners(newToken);
+    });
+  }
 };
