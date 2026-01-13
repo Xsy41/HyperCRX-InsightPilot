@@ -1,6 +1,5 @@
 import { metaStore } from '../api/common';
 
-import $ from 'jquery';
 import * as pageDetect from 'github-url-detection';
 import { getPlatform } from './get-platform';
 
@@ -14,7 +13,8 @@ export function getDeveloperName() {
 }
 
 export function getDeveloperNameByPage() {
-  return $('.users__personal-name p').first().text().trim().replace('@', '');
+  const element = document.querySelector('.users__personal-name p');
+  return element ? element.textContent?.trim().replace('@', '') || '' : '';
 }
 
 export function getDeveloperNameByUrl() {
