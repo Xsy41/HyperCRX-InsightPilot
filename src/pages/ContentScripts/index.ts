@@ -28,3 +28,5 @@ import './features/developer-hovercard-info/gitee-index';
 import './features/repo-sidebar-labels';
 import './features/repo-sidebar-labels/gitee-index';
 import './features/fast-pr';
+// import './features/analysis';
+import './features/report-generator';

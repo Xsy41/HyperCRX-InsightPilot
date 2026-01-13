@@ -114,7 +114,7 @@ const init = async (): Promise<void> => {
   try {
     await elementReadyWithTimeout('[data-testid=github-avatar]', { stopOnDomReady: false }, 1500);
   } catch (error) {
-    // The current interface does not have data-testid=github-avatar information
+    console.log('The current interface does not have data-testid=github-avatar information');
   }
 
   // Initial processing of existing elements

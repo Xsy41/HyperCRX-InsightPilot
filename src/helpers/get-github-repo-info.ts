@@ -1,5 +1,6 @@
 import { metaStore } from '../api/common';
 
+import $ from 'jquery';
 import * as pageDetect from 'github-url-detection';
 import elementReady from 'element-ready';
 import { getPlatform } from './get-platform';
@@ -14,18 +15,12 @@ export function getRepoName() {
 }
 
 export function getRepoNameByPage() {
-  const repoName: string[] = [];
-  const elements = document.querySelectorAll('header span.AppHeader-context-item-label');
-  elements.forEach((element) => {
-    const text = element.textContent?.trim() || '';
-    if (text) {
-      repoName.push(text);
-    }
+  let repoName: string[] = [];
+  $('header span.AppHeader-context-item-label').map(function () {
+    repoName.push($(this).text().trim());
   });
-  if (repoName.length >= 2) {
-    return `${repoName[0]}/${repoName[1]}`;
-  }
-  return '';
+  let repoFullName = repoName[0] + '/' + repoName[1];
+  return repoFullName;
 }
 
 export function getRepoNameByUrl() {
@@ -37,8 +32,8 @@ export function getRepoNameByUrl() {
 }
 
 export function hasRepoContainerHeader() {
-  const headerElement = document.querySelector('#repository-container-header');
-  return headerElement && !headerElement.hasAttribute('hidden');
+  const headerElement = $('#repository-container-header');
+  return headerElement && !headerElement.attr('hidden');
 }
 
 export async function isRepoRoot() {
@@ -52,14 +47,16 @@ export async function isPublicRepo() {
   const selector = 'meta[name="octolytics-dimension-repository_public"]';
   await elementReady(selector);
   // <meta name="octolytics-dimension-repository_public" content="true/false">
-  const metaElement = document.querySelector(selector);
-  const isPublic = metaElement?.getAttribute('content') === 'true';
-  return pageDetect.isRepo() && !!isPublic;
+  const isPublic = $(selector).attr('content') === 'true';
+  return pageDetect.isRepo() && isPublic;
 }
 export async function isPublicRepoWithMeta() {
   const platform = getPlatform();
   if (platform === 'unknown') {
     return false;
   }
-  return (await isPublicRepo()) && (await metaStore.has(platform, getRepoName()));
+  return (
+    (await isPublicRepo()) &&
+    ((await metaStore.has(platform, getRepoNameByUrl())) || (await metaStore.has(platform, getRepoNameByPage())))
+  );
 }
