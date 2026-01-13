@@ -114,8 +114,8 @@ const DARK_THEME: BarsTheme = {
  * @param params ECharts tooltip parameters
  * @returns Formatted tooltip HTML string
  */
-const tooltipFormatter = (params: any): string => {
-  if (!params) {
+const tooltipFormatter = (params: echarts.ECTooltipFormat): string => {
+  if (!params || !params.seriesName || !params.data) {
     return '';
   }
 
@@ -130,6 +130,12 @@ const tooltipFormatter = (params: any): string => {
 const Bars: React.FC<BarsProps> = ({ theme, height, legend1, legend2, yName1, yName2, data1, data2, onClick }) => {
   const { timeLength, minInterval } = getInterval(data1);
   const divRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<echarts.ECharts | null>(null);
+
+  /**
+   * Check if chart has any data
+   */
+  const hasData = data1.length > 0 || data2.length > 0;
 
   /**
    * Get theme configuration based on theme mode
@@ -142,9 +148,14 @@ const Bars: React.FC<BarsProps> = ({ theme, height, legend1, legend2, yName1, yN
    * Handle chart click event
    * @param params ECharts click event parameters
    */
-  const handleChartClick = (params: any): void => {
-    if (onClick) {
-      onClick(params as ChartClickParams);
+  const handleChartClick = (params: echarts.ECElementEvent): void => {
+    if (onClick && params.data) {
+      onClick({
+        seriesName: params.seriesName || '',
+        data: params.data as [string, number],
+        dataIndex: params.dataIndex || 0,
+        marker: params.marker || '',
+      });
     }
   };
 
@@ -262,46 +273,75 @@ const Bars: React.FC<BarsProps> = ({ theme, height, legend1, legend2, yName1, yN
   );
 
   /**
-   * Initialize ECharts instance
+   * Initialize and dispose ECharts instance
    */
   useEffect(() => {
     const chartDOM = divRef.current;
     if (!chartDOM) return;
 
-    const instance = echarts.init(chartDOM);
+    try {
+      // Initialize chart instance
+      const instance = echarts.init(chartDOM);
+      chartRef.current = instance;
 
-    return () => {
-      instance.dispose();
-    };
+      return () => {
+        // Cleanup
+        instance.dispose();
+        chartRef.current = null;
+      };
+    } catch (error) {
+      console.error('Failed to initialize ECharts instance:', error);
+    }
   }, []);
 
   /**
    * Update chart when option, onClick, or timeLength changes
    */
   useEffect(() => {
-    const chartDOM = divRef.current;
-    if (!chartDOM) return;
-
-    const instance = echarts.getInstanceByDom(chartDOM);
+    const instance = chartRef.current;
     if (!instance) return;
 
-    judgeInterval(instance, timeLength);
-    instance.setOption(option);
+    try {
+      judgeInterval(instance, timeLength);
+      instance.setOption(option, true);
 
-    let clickHandler: echarts.ECElementEventResponder<echarts.ECElementEvent> | undefined;
-    if (onClick) {
-      clickHandler = handleChartClick;
-      instance.on('click', clickHandler);
-    }
-
-    return () => {
-      if (clickHandler) {
-        instance.off('click', clickHandler);
+      // Add click event listener if onClick is provided
+      if (onClick) {
+        instance.on('click', handleChartClick);
       }
-    };
+
+      return () => {
+        // Remove event listener
+        instance.off('click', handleChartClick);
+      };
+    } catch (error) {
+      console.error('Failed to update ECharts option:', error);
+    }
   }, [option, onClick, timeLength]);
 
-  return <div ref={divRef} style={{ width: '100%', height }}></div>;
+  return (
+    <div style={{ width: '100%', height }}>
+      {hasData ? (
+        <div ref={divRef} style={{ width: '100%', height }}></div>
+      ) : (
+        <div
+          style={{
+            width: '100%',
+            height,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            color: themeConfig.FG_COLOR,
+            fontSize: '14px',
+            backgroundColor: themeConfig.BG_COLOR,
+            border: `1px solid ${themeConfig.FG_COLOR}20`,
+          }}
+        >
+          No data available
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default Bars;
