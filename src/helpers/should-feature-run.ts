@@ -123,8 +123,14 @@ export function allConditions(conditions: ConditionFunction[]): ConditionFunctio
     throw new TypeError('Conditions must be an array');
   }
   return async () => {
-    const results = await Promise.all(conditions.map(safeExecuteCondition));
-    return results.every(Boolean);
+    // Early return optimization - stop at first false condition
+    for (const condition of conditions) {
+      const result = await safeExecuteCondition(condition);
+      if (!result) {
+        return false;
+      }
+    }
+    return true;
   };
 }
 
@@ -142,8 +148,77 @@ export function anyCondition(conditions: ConditionFunction[]): ConditionFunction
     throw new TypeError('Conditions must be an array');
   }
   return async () => {
-    const results = await Promise.all(conditions.map(safeExecuteCondition));
-    return results.some(Boolean);
+    // Early return optimization - stop at first true condition
+    for (const condition of conditions) {
+      const result = await safeExecuteCondition(condition);
+      if (result) {
+        return true;
+      }
+    }
+    return false;
+  };
+}
+
+/**
+ * Create a condition function that chains multiple conditions together
+ * @param conditions The conditions to chain
+ * @returns A new condition that returns the first truthy result, or false if all are false
+ * @example
+ * ```ts
+ * // Check for GitHub first, then Gitee, then GitLab
+ * const isOnCodeHosting = chainConditions([isGitHubPage, isGiteePage, isGitLabPage]);
+ * ```
+ */
+export function chainConditions(conditions: ConditionFunction[]): ConditionFunction {
+  if (!Array.isArray(conditions)) {
+    throw new TypeError('Conditions must be an array');
+  }
+  return async () => {
+    for (const condition of conditions) {
+      const result = await safeExecuteCondition(condition);
+      if (result) {
+        return result;
+      }
+    }
+    return false;
+  };
+}
+
+/**
+ * Create a cached version of a condition function
+ * @param condition The condition to cache
+ * @param ttl Time to live in milliseconds (default: 5000)
+ * @returns A new condition that caches its results
+ * @example
+ * ```ts
+ * const cachedIsGitHubPage = cacheCondition(isGitHubPage, 10000);
+ * ```
+ */
+export function cacheCondition(condition: ConditionFunction, ttl: number = 5000): ConditionFunction {
+  if (typeof condition !== 'function') {
+    throw new TypeError('Condition must be a function');
+  }
+
+  let cache: {
+    result: boolean;
+    timestamp: number;
+  } | null = null;
+
+  return async () => {
+    // Check if cache is valid
+    const now = Date.now();
+    if (cache && now - cache.timestamp < ttl) {
+      return cache.result;
+    }
+
+    // Execute condition and cache result
+    const result = await safeExecuteCondition(condition);
+    cache = {
+      result,
+      timestamp: now,
+    };
+
+    return result;
   };
 }
 
