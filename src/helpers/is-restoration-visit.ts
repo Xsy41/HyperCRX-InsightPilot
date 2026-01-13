@@ -27,11 +27,44 @@ export interface TurboVisitEvent extends CustomEvent {
  */
 export type TurboVisitAction = 'advance' | 'restore';
 
+/**
+ * Visit history entry
+ */
+export interface VisitHistoryEntry {
+  /** Visit type */
+  type: TurboVisitAction;
+  /** Visit timestamp */
+  timestamp: number;
+  /** Event detail from the turbo:visit event */
+  detail?: TurboVisitEventDetail;
+}
+
+/**
+ * Visit change listener type
+ */
+export type VisitChangeListener = (
+  newType: TurboVisitAction,
+  oldType: TurboVisitAction,
+  entry: VisitHistoryEntry
+) => void;
+
 // Current visit type, default to 'advance'
 let visitType: TurboVisitAction = 'advance';
 
+// Previous visit type, for detecting changes
+let previousVisitType: TurboVisitAction = 'advance';
+
 // Event listener cleanup function
 let cleanupListener: (() => void) | null = null;
+
+// Visit history records
+let visitHistory: VisitHistoryEntry[] = [];
+
+// Maximum number of history entries to keep
+const MAX_HISTORY_ENTRIES = 10;
+
+// Visit change listeners
+let visitChangeListeners: Set<VisitChangeListener> = new Set();
 
 /**
  * Initialize the restoration visit tracker
@@ -47,6 +80,13 @@ function initializeRestorationVisitTracker(): void {
   if (cleanupListener) {
     return;
   }
+
+  // Create initial history entry
+  const initialEntry: VisitHistoryEntry = {
+    type: visitType,
+    timestamp: Date.now(),
+  };
+  visitHistory.push(initialEntry);
 
   // Event handler for turbo:visit events
   const handleTurboVisit = (event: Event): void => {
@@ -65,11 +105,40 @@ function initializeRestorationVisitTracker(): void {
         const turboEvent = event as TurboVisitEvent;
         const detail = turboEvent.detail;
 
+        let newVisitType: TurboVisitAction;
         if (detail.action === 'advance' || detail.action === 'restore') {
-          visitType = detail.action;
+          newVisitType = detail.action;
         } else {
           console.warn(`Unexpected visit action: ${detail.action}, defaulting to 'advance'`);
-          visitType = 'advance';
+          newVisitType = 'advance';
+        }
+
+        // Create history entry
+        const historyEntry: VisitHistoryEntry = {
+          type: newVisitType,
+          timestamp: Date.now(),
+          detail,
+        };
+
+        // Update visit type
+        previousVisitType = visitType;
+        visitType = newVisitType;
+
+        // Add to history and limit size
+        visitHistory.push(historyEntry);
+        if (visitHistory.length > MAX_HISTORY_ENTRIES) {
+          visitHistory.shift();
+        }
+
+        // Notify listeners of visit type change
+        if (previousVisitType !== newVisitType) {
+          visitChangeListeners.forEach((listener) => {
+            try {
+              listener(newVisitType, previousVisitType, historyEntry);
+            } catch (error) {
+              console.error('Error in visit change listener:', error instanceof Error ? error.message : String(error));
+            }
+          });
         }
       }
     } catch (error) {
@@ -86,8 +155,11 @@ function initializeRestorationVisitTracker(): void {
   cleanupListener = () => {
     document.removeEventListener('turbo:visit', handleTurboVisit);
     cleanupListener = null;
-    // Reset visit type on cleanup
+    // Reset state on cleanup
     visitType = 'advance';
+    previousVisitType = 'advance';
+    visitHistory = [];
+    visitChangeListeners.clear();
   };
 }
 
@@ -163,6 +235,128 @@ export function setVisitType(type: TurboVisitAction): void {
     throw new TypeError(`Invalid visit type: ${type}. Expected 'advance' or 'restore'`);
   }
   visitType = type;
+}
+
+/**
+ * Add a listener for visit type changes
+ * @param listener The listener function to add
+ * @returns A function to remove the listener
+ * @example
+ * ```ts
+ * // Add a visit change listener
+ * const removeListener = addVisitChangeListener((newType, oldType, entry) => {
+ *   console.log(`Visit type changed from ${oldType} to ${newType} at ${new Date(entry.timestamp)}`);
+ * });
+ *
+ * // Remove the listener when no longer needed
+ * removeListener();
+ * ```
+ */
+export function addVisitChangeListener(listener: VisitChangeListener): () => void {
+  visitChangeListeners.add(listener);
+
+  // Return a function to remove the listener
+  return () => {
+    visitChangeListeners.delete(listener);
+  };
+}
+
+/**
+ * Remove a listener for visit type changes
+ * @param listener The listener function to remove
+ * @example
+ * ```ts
+ * const myListener = (newType, oldType, entry) => {
+ *   console.log(`Visit type changed: ${oldType} → ${newType}`);
+ * };
+ *
+ * addVisitChangeListener(myListener);
+ * // ... later
+ * removeVisitChangeListener(myListener);
+ * ```
+ */
+export function removeVisitChangeListener(listener: VisitChangeListener): void {
+  visitChangeListeners.delete(listener);
+}
+
+/**
+ * Get the visit history
+ * @returns An array of visit history entries
+ * @example
+ * ```ts
+ * // Get the visit history
+ * const history = getVisitHistory();
+ * console.log(`Total visits: ${history.length}`);
+ * console.log(`Last visit: ${history[history.length - 1].type} at ${new Date(history[history.length - 1].timestamp)}`);
+ * ```
+ */
+export function getVisitHistory(): readonly VisitHistoryEntry[] {
+  return [...visitHistory];
+}
+
+/**
+ * Clear the visit history
+ * @example
+ * ```ts
+ * // Clear all visit history
+ * clearVisitHistory();
+ * ```
+ */
+export function clearVisitHistory(): void {
+  visitHistory = [];
+  // Add the current visit as the new initial entry
+  visitHistory.push({
+    type: visitType,
+    timestamp: Date.now(),
+  });
+}
+
+/**
+ * Get the previous visit type
+ * @returns The previous visit type, or null if no previous visit
+ * @example
+ * ```ts
+ * // Get the previous visit type
+ * const previousType = getPreviousVisitType();
+ * if (previousType) {
+ *   console.log(`Previous visit was: ${previousType}`);
+ * }
+ * ```
+ */
+export function getPreviousVisitType(): TurboVisitAction {
+  return previousVisitType;
+}
+
+/**
+ * Check if the visit type has changed from the previous visit
+ * @returns True if the visit type has changed, false otherwise
+ * @example
+ * ```ts
+ * // Check if visit type changed
+ * if (hasVisitTypeChanged()) {
+ *   console.log('Visit type changed from previous visit');
+ * }
+ * ```
+ */
+export function hasVisitTypeChanged(): boolean {
+  return visitType !== previousVisitType;
+}
+
+/**
+ * Reset the restoration visit tracker
+ * This will clear all history and listeners, and reinitialize the tracker
+ * @example
+ * ```ts
+ * // Reset the tracker
+ * resetRestorationVisitTracker();
+ * ```
+ */
+export function resetRestorationVisitTracker(): void {
+  // Cleanup existing tracker
+  cleanupRestorationVisitTracker();
+
+  // Reinitialize the tracker
+  initializeRestorationVisitTracker();
 }
 
 // Initialize the tracker when the module is loaded
