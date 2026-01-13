@@ -123,6 +123,64 @@ export function getInterval(data: TimeDataPoint[]): IntervalResult {
     console.error('Error calculating interval:', error instanceof Error ? error.message : String(error));
     throw error;
   }
+
+  // Only apply special handling for long time periods (more than 2 years)
+  if (timeLength <= 2) {
+    return;
+  }
+
+  // Set up dataZoom event listener
+  instance.on('dataZoom', (params: ZoomParams) => {
+    try {
+      const chartOption = instance.getOption();
+      if (!chartOption || typeof chartOption !== 'object') {
+        console.error('Invalid chart option returned from getOption');
+        return;
+      }
+
+      const xAxis = chartOption.xAxis;
+      if (!Array.isArray(xAxis) || xAxis.length === 0) {
+        console.error('No xAxis configuration found in chart options');
+        return;
+      }
+
+      const batch = params.batch;
+      if (!batch || !Array.isArray(batch) || batch.length === 0) {
+        return;
+      }
+
+      const zoomBatch = batch[0];
+      const { start: startValue, end: endValue } = zoomBatch;
+
+      // Validate zoom values are within expected range
+      if (startValue < 0 || startValue > 100 || endValue < 0 || endValue > 100) {
+        console.error(`Invalid zoom values: start=${startValue}, end=${endValue}. Expected 0-100`);
+        return;
+      }
+
+      // Determine appropriate interval based on zoom level
+      // - Fully zoomed out (0-100): use yearly interval for better readability
+      // - Zoomed in: use monthly interval for more detailed view
+      const minInterval = startValue === 0 && endValue === 100 ? MS_IN_YEAR : MS_IN_MONTH;
+
+      // Only update if the interval has changed
+      const currentMinInterval = xAxis[0].minInterval;
+      if (currentMinInterval === minInterval) {
+        return;
+      }
+
+      // Update chart with new interval
+      instance.setOption({
+        xAxis: [
+          {
+            minInterval,
+          },
+        ],
+      });
+    } catch (error) {
+      console.error('Error handling dataZoom event:', error instanceof Error ? error.message : String(error));
+    }
+  });
 }
 
 /**

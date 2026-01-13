@@ -45,7 +45,6 @@ const View = ({ currentRepo, issueDetail, meta }: Props): JSX.Element | null => 
   if (isNull(issueDetail) || isAllNull(issueDetail)) return null;
 
   const onClick = (curMonth: string, params: any) => {
-    if (!isGithub()) return;
     const seriesIndex = params.seriesIndex;
     let type;
     if (seriesIndex === 0) {
@@ -59,7 +58,15 @@ const View = ({ currentRepo, issueDetail, meta }: Props): JSX.Element | null => 
     if (month.length < 2) {
       month = '0' + month;
     }
-    window.open(`/${currentRepo}/issues?q=is:issue ${type}:${year}-${month} sort:updated-asc`);
+
+    if (isGithub()) {
+      window.open(`/${currentRepo}/issues?q=is:issue ${type}:${year}-${month} sort:updated-asc`);
+    } else {
+      // Gitee platform
+      // Extract owner and repo from currentRepo (format: owner/repo)
+      const [owner, repo] = currentRepo.split('/');
+      window.open(`https://gitee.com/${owner}/${repo}/issues?utf8=✓&q=is:issue+${type}:${year}-${month}`);
+    }
   };
 
   return (
