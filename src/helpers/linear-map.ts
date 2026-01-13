@@ -9,6 +9,11 @@
 export type Range = [number, number];
 
 /**
+ * Easing function type definition
+ */
+export type EasingFunction = (t: number) => number;
+
+/**
  * Linear map options interface
  */
 export interface LinearMapOptions {
@@ -24,6 +29,24 @@ export interface LinearMapOptions {
    * Default value to return if mapping is undefined (e.g., division by zero)
    */
   defaultValue?: number;
+  /**
+   * Easing function to apply to the mapping (default: linear)
+   */
+  easing?: EasingFunction;
+}
+
+/**
+ * Bi-directional mapper interface
+ */
+export interface BiDirectionalMapper {
+  /**
+   * Map value from domain to range
+   */
+  forward: (val: number) => number;
+  /**
+   * Map value from range to domain
+   */
+  reverse: (val: number) => number;
 }
 
 /**
@@ -57,7 +80,7 @@ export function linearMap(
   options: LinearMapOptions = {}
 ): number {
   // Extract options with defaults
-  const { clamp = true, invert = false, defaultValue } = options;
+  const { clamp = true, invert = false, defaultValue, easing } = options;
 
   // Validate input value type
   if (typeof val !== 'number' || isNaN(val)) {
@@ -99,8 +122,14 @@ export function linearMap(
     }
   }
 
-  // Calculate linear mapping
-  return ((processedVal - effectiveD0) / subDomain) * subRange + r0;
+  // Calculate normalized 0-1 value for easing
+  const normalizedVal = (processedVal - effectiveD0) / subDomain;
+
+  // Apply easing function if provided
+  const easedVal = easing ? easing(normalizedVal) : normalizedVal;
+
+  // Calculate final mapped value
+  return easedVal * subRange + r0;
 }
 
 /**
@@ -209,6 +238,118 @@ export function mapArrayLinear(
 ): number[] {
   return values.map((val) => linearMap(val, domain, range, options));
 }
+
+/**
+ * Create a bi-directional linear mapper that can map forward and reverse
+ * @param domain The input range [min, max] or a single number
+ * @param range The output range [min, max] or a single number
+ * @param options Mapping options
+ * @returns Bi-directional mapper with forward and reverse mapping functions
+ * @example
+ * ```typescript
+ * // Create a bi-directional mapper for temperature conversion
+ * const tempConverter = createBiDirectionalMapper([32, 212], [0, 100]);
+ * const celsius = tempConverter.forward(98.6); // Fahrenheit to Celsius: ~37
+ * const fahrenheit = tempConverter.reverse(37); // Celsius to Fahrenheit: ~98.6
+ * ```
+ */
+export function createBiDirectionalMapper(
+  domain: Range | number,
+  range: Range | number,
+  options: LinearMapOptions = {}
+): BiDirectionalMapper {
+  return {
+    forward: (val: number) => linearMap(val, domain, range, options),
+    reverse: (val: number) => linearMap(val, range, domain, options),
+  };
+}
+
+/**
+ * Calculate the minimum and maximum values from an array of numbers
+ * @param values Array of numbers to calculate range from
+ * @returns Range [min, max] of the input values
+ * @example
+ * ```typescript
+ * const values = [1, 5, 3, 9, 2];
+ * const range = calculateRange(values); // Returns [1, 9]
+ * ```
+ */
+export function calculateRange(values: number[]): Range {
+  if (!Array.isArray(values) || values.length === 0) {
+    throw new Error('Invalid input: Expected a non-empty array of numbers');
+  }
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  return [min, max];
+}
+
+/**
+ * Normalize a value to the 0-1 range based on the given domain
+ * @param val Value to normalize
+ * @param domain Domain range [min, max] or a single number
+ * @param clamp Whether to clamp the value to the domain (default: true)
+ * @returns Normalized value between 0 and 1
+ * @example
+ * ```typescript
+ * const normalized = normalizeValue(50, [0, 100]); // Returns 0.5
+ * ```
+ */
+export function normalizeValue(val: number, domain: Range | number, clamp: boolean = true): number {
+  return linearMap(val, domain, [0, 1], { clamp });
+}
+
+/**
+ * Denormalize a value from the 0-1 range to the given range
+ * @param val Normalized value (between 0 and 1)
+ * @param range Output range [min, max] or a single number
+ * @param clamp Whether to clamp the value to 0-1 (default: true)
+ * @returns Denormalized value in the output range
+ * @example
+ * ```typescript
+ * const denormalized = denormalizeValue(0.5, [0, 100]); // Returns 50
+ * ```
+ */
+export function denormalizeValue(val: number, range: Range | number, clamp: boolean = true): number {
+  return linearMap(val, [0, 1], range, { clamp });
+}
+
+/**
+ * Collection of common easing functions
+ * @example
+ * ```typescript
+ * linearMap(50, [0, 100], [0, 1], { easing: Easing.easeInOutQuad });
+ * ```
+ */
+export const Easing = {
+  /** Linear easing */
+  linear: (t: number) => t,
+  /** Quadratic ease in */
+  easeInQuad: (t: number) => t * t,
+  /** Quadratic ease out */
+  easeOutQuad: (t: number) => t * (2 - t),
+  /** Quadratic ease in out */
+  easeInOutQuad: (t: number) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t),
+  /** Cubic ease in */
+  easeInCubic: (t: number) => t * t * t,
+  /** Cubic ease out */
+  easeOutCubic: (t: number) => --t * t * t + 1,
+  /** Cubic ease in out */
+  easeInOutCubic: (t: number) => (t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1),
+  /** Sine ease in */
+  easeInSine: (t: number) => 1 - Math.cos((t * Math.PI) / 2),
+  /** Sine ease out */
+  easeOutSine: (t: number) => Math.sin((t * Math.PI) / 2),
+  /** Sine ease in out */
+  easeInOutSine: (t: number) => -(Math.cos(Math.PI * t) - 1) / 2,
+  /** Circular ease in */
+  easeInCirc: (t: number) => 1 - Math.sqrt(1 - t * t),
+  /** Circular ease out */
+  easeOutCirc: (t: number) => Math.sqrt(1 - --t * t),
+  /** Circular ease in out */
+  easeInOutCirc: (t: number) =>
+    t < 0.5 ? (1 - Math.sqrt(1 - 4 * t * t)) / 2 : (Math.sqrt(1 - 4 * (t - 1) * (t - 1)) + 1) / 2,
+};
 
 // Export as default for backward compatibility
 export default linearMap;
