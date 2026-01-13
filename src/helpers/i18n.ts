@@ -60,6 +60,21 @@ export interface I18nInitOptions {
 }
 
 /**
+ * Language change callback type
+ */
+export type LanguageChangeCallback = (language: SupportedLanguage) => void;
+
+/**
+ * i18n initialization status
+ */
+let isInitialized = false;
+
+/**
+ * Language change listeners
+ */
+const languageChangeListeners: Set<LanguageChangeCallback> = new Set();
+
+/**
  * Language detector options
  */
 const detectorOptions = {
@@ -167,6 +182,14 @@ export const initializeI18n = async (options: I18nInitOptions = {}): Promise<voi
           transKeepBasicHtmlNodesFor: ['br', 'strong', 'i', 'p'] as const,
         },
       });
+
+    isInitialized = true;
+
+    // Add language change listener
+    i18n.on('languageChanged', (lng) => {
+      const language = isLanguageSupported(lng) ? lng : 'en';
+      languageChangeListeners.forEach((callback) => callback(language));
+    });
 
     if (debug) {
       console.log('i18n initialized successfully');
@@ -335,6 +358,130 @@ export const formatDate = (date: Date, options: Intl.DateTimeFormatOptions = {})
 export const formatNumber = (number: number, options: Intl.NumberFormatOptions = {}): string => {
   const currentLang = getCurrentLanguage();
   return new Intl.NumberFormat(currentLang, options).format(number);
+};
+
+/**
+ * Create a translation function with a prefix
+ * @param prefix Key prefix to use for all translations
+ * @returns Translation function with prefixed keys
+ * @example
+ * ```ts
+ * // Create prefixed translation function
+ * const t = createPrefixedT('component.');
+ * const translated = t('title'); // Equivalent to t('component.title')
+ * ```
+ */
+export const createPrefixedT = (prefix: string) => {
+  return (key: string, options?: any) => {
+    const fullKey = `${prefix}${key}`;
+    return i18n.t(fullKey, options);
+  };
+};
+
+/**
+ * Translate multiple keys at once
+ * @param keys Array of translation keys
+ * @param options Optional translation options
+ * @returns Object with translated values
+ * @example
+ * ```ts
+ * // Translate multiple keys
+ * const translations = translateMultiple(['hello', 'welcome'], { name: 'John' });
+ * // Returns { hello: 'Hello', welcome: 'Welcome, John!' }
+ * ```
+ */
+export const translateMultiple = (keys: string[], options?: any) => {
+  const result: Record<string, string> = {};
+  for (const key of keys) {
+    result[key] = i18n.t(key, options);
+  }
+  return result;
+};
+
+/**
+ * Add a listener for language changes
+ * @param callback Function to call when language changes
+ * @returns Function to remove the listener
+ * @example
+ * ```ts
+ * // Add language change listener
+ * const removeListener = onLanguageChange((lang) => {
+ *   console.log('Language changed to:', lang);
+ * });
+ *
+ * // Later remove the listener
+ * removeListener();
+ * ```
+ */
+export const onLanguageChange = (callback: LanguageChangeCallback): (() => void) => {
+  languageChangeListeners.add(callback);
+  return () => {
+    languageChangeListeners.delete(callback);
+  };
+};
+
+/**
+ * Check if i18n is initialized
+ * @returns True if initialized, false otherwise
+ * @example
+ * ```ts
+ * // Check if i18n is initialized
+ * if (isI18nInitialized()) {
+ *   // Use i18n functions
+ * }
+ * ```
+ */
+export const isI18nInitialized = (): boolean => {
+  return isInitialized;
+};
+
+/**
+ * Get a translation with a fallback value
+ * @param key Translation key
+ * @param fallback Fallback value if key doesn't exist
+ * @param options Optional translation options
+ * @returns Translated string or fallback
+ * @example
+ * ```ts
+ * // Get translation with fallback
+ * const translated = tWithFallback('non_existent_key', 'Fallback text');
+ * ```
+ */
+export const tWithFallback = (key: string, fallback: string, options?: any): string => {
+  if (i18n.exists(key)) {
+    return i18n.t(key, options);
+  }
+  return fallback;
+};
+
+/**
+ * Get the default language
+ * @returns Default language code
+ * @example
+ * ```ts
+ * // Get default language
+ * const defaultLang = getDefaultLanguage(); // 'en'
+ * ```
+ */
+export const getDefaultLanguage = (): SupportedLanguage => {
+  return 'en';
+};
+
+/**
+ * Set a custom language resource
+ * @param language Language code
+ * @param namespace Namespace to update
+ * @param resources Resource object to add/update
+ * @example
+ * ```ts
+ * // Add custom resources
+ * addLanguageResource('en', 'translation', {
+ *   custom_key: 'Custom translation'
+ * });
+ * ```
+ */
+export const addLanguageResource = (language: SupportedLanguage, namespace: string, resources: any): void => {
+  i18n.addResourceBundle(language, namespace, resources, true, true);
 };
 
 export default i18n;
