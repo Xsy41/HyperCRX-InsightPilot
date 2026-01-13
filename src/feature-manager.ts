@@ -133,7 +133,7 @@ const setupPageLoad = async (id: FeatureId, config: InternalRunConfig): Promise<
  */
 export const getFeatureID = (url: string): FeatureId => {
   const prefix = 'hypercrx-';
-  const pathComponents = url.split('/');
+  const pathComponents = url.split('/').filter(Boolean); // Filter out empty components
   let name = pathComponents.pop()?.split('.')[0];
 
   // Handle cases where URL might be empty or malformed
@@ -143,10 +143,11 @@ export const getFeatureID = (url: string): FeatureId => {
 
   // If filename is index or gitee-index, use parent directory as feature name
   if (name === 'index' || name === 'gitee-index') {
-    name = pathComponents.pop()!;
-    if (!name) {
+    const parentName = pathComponents.pop();
+    if (!parentName) {
       throw new Error(`Invalid URL structure for feature ID extraction: ${url}`);
     }
+    name = parentName;
   }
 
   return `${prefix}${name}` as FeatureId;
@@ -184,6 +185,33 @@ const handleTurboRender = throttle(async (id: FeatureId, details: InternalRunCon
   }
 }, 200);
 
+/** Store event listeners for cleanup */
+const eventListeners: Array<{
+  event: string;
+  listener: EventListener;
+}> = [];
+
+/**
+ * Add event listener with cleanup support
+ * @param event Event name
+ * @param listener Event listener function
+ */
+const addEventListenerWithCleanup = (event: string, listener: EventListener): void => {
+  document.addEventListener(event, listener);
+  eventListeners.push({ event, listener });
+};
+
+/**
+ * Cleanup all registered event listeners
+ */
+export const cleanupEventListeners = (): void => {
+  for (const { event, listener } of eventListeners) {
+    document.removeEventListener(event, listener);
+  }
+  // Clear the array after cleanup
+  eventListeners.length = 0;
+};
+
 /**
  * Register a new feature
  * @param id Feature ID
@@ -193,6 +221,10 @@ export const addFeature = async (id: FeatureId, ...loaders: FeatureLoader[]): Pr
   try {
     /* Feature filtering and running */
     const options = await globalReady;
+    if (!options) {
+      // Global ready failed, skip feature registration
+      return;
+    }
 
     // If the feature is disabled, skip it
     if (!options[id as keyof typeof options]) {
@@ -225,18 +257,25 @@ export const addFeature = async (id: FeatureId, ...loaders: FeatureLoader[]): Pr
         init,
       };
 
+      // Create a bound event listener for each loader
+      const boundTurboRenderHandler = () => handleTurboRender(id, details, restore);
+
       // Run feature initialization based on awaitDomReady option
       if (awaitDomReady) {
         (async () => {
-          await domLoaded;
-          await setupPageLoad(id, details);
+          try {
+            await domLoaded;
+            await setupPageLoad(id, details);
+          } catch (error) {
+            log.error(id, error);
+          }
         })();
       } else {
         setupPageLoad(id, details);
       }
 
-      // Add turbo:render event listener for feature restoration and reinitialization
-      document.addEventListener('turbo:render', () => handleTurboRender(id, details, restore));
+      // Add turbo:render event listener with cleanup support
+      addEventListenerWithCleanup('turbo:render', boundTurboRenderHandler);
     }
   } catch (error) {
     log.error(id, error);
@@ -248,6 +287,7 @@ const features = {
   add: addFeature,
   log,
   getFeatureID,
+  cleanup: cleanupEventListeners,
 };
 
 export default features;
