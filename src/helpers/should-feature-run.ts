@@ -67,6 +67,10 @@ export interface ConditionEvaluationResult {
    * Results of the exclude conditions
    */
   excludeResults: boolean[];
+  /**
+   * Evaluation time in milliseconds
+   */
+  evaluationTime: number;
 }
 
 /**
@@ -148,6 +152,193 @@ export function anyCondition(conditions: ConditionFunction[]): ConditionFunction
 }
 
 /**
+ * Create a condition function that checks if exactly one condition is true
+ * @param conditions The conditions to check
+ * @returns A new condition that returns true if exactly one condition is true
+ * @example
+ * ```ts
+ * const isExactlyOnePlatform = exactlyOneCondition([isGitHubPage, isGiteePage, isGitlabPage]);
+ * ```
+ */
+export function exactlyOneCondition(conditions: ConditionFunction[]): ConditionFunction {
+  if (!Array.isArray(conditions)) {
+    throw new TypeError('Conditions must be an array');
+  }
+  return async () => {
+    const results = await Promise.all(conditions.map(safeExecuteCondition));
+    const trueCount = results.filter(Boolean).length;
+    return trueCount === 1;
+  };
+}
+
+/**
+ * Create a condition function that checks if a minimum number of conditions are true
+ * @param conditions The conditions to check
+ * @param minRequired Minimum number of conditions that must be true
+ * @returns A new condition that returns true if at least minRequired conditions are true
+ * @example
+ * ```ts
+ * // Require at least 2 of 3 conditions to be true
+ * const isAtLeastTwo = minConditions([cond1, cond2, cond3], 2);
+ * ```
+ */
+export function minConditions(conditions: ConditionFunction[], minRequired: number): ConditionFunction {
+  if (!Array.isArray(conditions)) {
+    throw new TypeError('Conditions must be an array');
+  }
+  if (typeof minRequired !== 'number' || minRequired < 1 || minRequired > conditions.length) {
+    throw new TypeError('minRequired must be a number between 1 and the number of conditions');
+  }
+  return async () => {
+    const results = await Promise.all(conditions.map(safeExecuteCondition));
+    const trueCount = results.filter(Boolean).length;
+    return trueCount >= minRequired;
+  };
+}
+
+/**
+ * Create a condition function that checks if at most a maximum number of conditions are true
+ * @param conditions The conditions to check
+ * @param maxAllowed Maximum number of conditions that can be true
+ * @returns A new condition that returns true if no more than maxAllowed conditions are true
+ * @example
+ * ```ts
+ * // Allow at most 1 of 3 conditions to be true
+ * const isAtMostOne = maxConditions([cond1, cond2, cond3], 1);
+ * ```
+ */
+export function maxConditions(conditions: ConditionFunction[], maxAllowed: number): ConditionFunction {
+  if (!Array.isArray(conditions)) {
+    throw new TypeError('Conditions must be an array');
+  }
+  if (typeof maxAllowed !== 'number' || maxAllowed < 0 || maxAllowed > conditions.length) {
+    throw new TypeError('maxAllowed must be a number between 0 and the number of conditions');
+  }
+  return async () => {
+    const results = await Promise.all(conditions.map(safeExecuteCondition));
+    const trueCount = results.filter(Boolean).length;
+    return trueCount <= maxAllowed;
+  };
+}
+
+/**
+ * Create a condition function that checks if a specific condition is true after a delay
+ * @param condition The condition to check
+ * @param delay Delay in milliseconds before checking the condition
+ * @returns A new condition that returns true if the condition is true after the delay
+ * @example
+ * ```ts
+ * // Check if element exists after a 500ms delay
+ * const isElementLoadedAfterDelay = delayedCondition(() => !!document.querySelector('.element'), 500);
+ * ```
+ */
+export function delayedCondition(condition: ConditionFunction, delay: number): ConditionFunction {
+  if (typeof condition !== 'function') {
+    throw new TypeError('Condition must be a function');
+  }
+  if (typeof delay !== 'number' || delay < 0) {
+    throw new TypeError('Delay must be a non-negative number');
+  }
+  return async () => {
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    return safeExecuteCondition(condition);
+  };
+}
+
+/**
+ * Create a condition function that retries the condition until it's true or max attempts are reached
+ * @param condition The condition to check
+ * @param maxAttempts Maximum number of attempts
+ * @param delay Delay between attempts in milliseconds
+ * @returns A new condition that returns true if the condition becomes true within max attempts
+ * @example
+ * ```ts
+ * // Retry up to 5 times with 200ms delay between attempts
+ * const isElementLoaded = retryCondition(() => !!document.querySelector('.element'), 5, 200);
+ * ```
+ */
+export function retryCondition(condition: ConditionFunction, maxAttempts: number, delay: number): ConditionFunction {
+  if (typeof condition !== 'function') {
+    throw new TypeError('Condition must be a function');
+  }
+  if (typeof maxAttempts !== 'number' || maxAttempts < 1) {
+    throw new TypeError('maxAttempts must be a positive number');
+  }
+  if (typeof delay !== 'number' || delay < 0) {
+    throw new TypeError('Delay must be a non-negative number');
+  }
+  return async () => {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const result = await safeExecuteCondition(condition);
+      if (result) {
+        return true;
+      }
+      if (attempt < maxAttempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+    return false;
+  };
+}
+
+/**
+ * Create a condition function that combines multiple conditions with a custom reducer
+ * @param conditions The conditions to check
+ * @param reducer Function to combine results
+ * @returns A new condition that returns the result of the reducer applied to all conditions
+ * @example
+ * ```ts
+ * // Custom logic: at least two conditions must be true and none of them are condition3
+ * const customCondition = customCombineConditions(
+ *   [cond1, cond2, cond3],
+ *   (results) => {
+ *     const trueCount = results.filter(Boolean).length;
+ *     return trueCount >= 2 && !results[2];
+ *   }
+ * );
+ * ```
+ */
+export function customCombineConditions(
+  conditions: ConditionFunction[],
+  reducer: (results: boolean[]) => boolean
+): ConditionFunction {
+  if (!Array.isArray(conditions)) {
+    throw new TypeError('Conditions must be an array');
+  }
+  if (typeof reducer !== 'function') {
+    throw new TypeError('Reducer must be a function');
+  }
+  return async () => {
+    const results = await Promise.all(conditions.map(safeExecuteCondition));
+    return reducer(results);
+  };
+}
+
+/**
+ * Create a condition that is always true
+ * @returns A condition function that always returns true
+ * @example
+ * ```ts
+ * const alwaysTrue = alwaysCondition();
+ * ```
+ */
+export function alwaysCondition(): ConditionFunction {
+  return () => true;
+}
+
+/**
+ * Create a condition that is always false
+ * @returns A condition function that always returns false
+ * @example
+ * ```ts
+ * const alwaysFalse = neverCondition();
+ * ```
+ */
+export function neverCondition(): ConditionFunction {
+  return () => false;
+}
+
+/**
  * Validate should run conditions
  * @param props The conditions to validate
  * @throws TypeError if conditions are invalid
@@ -218,6 +409,7 @@ export default async function shouldFeatureRun(
  * console.log(result.shouldRun); // true or false
  * console.log(result.includeResults); // [true, false] or similar
  * console.log(result.excludeResults); // [false] or similar
+ * console.log(result.evaluationTime); // Evaluation time in milliseconds
  * ```
  */
 export async function evaluateConditions(
@@ -227,6 +419,8 @@ export async function evaluateConditions(
   // Validate input
   validateConditions(props);
 
+  const startTime = performance.now();
+
   const { asLongAs = [() => true], include = [() => true], exclude = [() => false] } = props;
   const { evaluateAll = false } = options;
 
@@ -235,11 +429,13 @@ export async function evaluateConditions(
   const hasExcludedCondition = excludeResults.some(Boolean);
 
   if (hasExcludedCondition && !evaluateAll) {
+    const evaluationTime = performance.now() - startTime;
     return {
       shouldRun: false,
       asLongAsResults: [],
       includeResults: [],
       excludeResults,
+      evaluationTime,
     };
   }
 
@@ -248,11 +444,13 @@ export async function evaluateConditions(
   const allAsLongAsMet = asLongAsResults.every(Boolean);
 
   if (!allAsLongAsMet && !evaluateAll) {
+    const evaluationTime = performance.now() - startTime;
     return {
       shouldRun: false,
       asLongAsResults,
       includeResults: [],
       excludeResults,
+      evaluationTime,
     };
   }
 
@@ -260,10 +458,63 @@ export async function evaluateConditions(
   const includeResults = await Promise.all(include.map(safeExecuteCondition));
   const anyIncludeMet = includeResults.some(Boolean);
 
+  const evaluationTime = performance.now() - startTime;
+
   return {
     shouldRun: !hasExcludedCondition && allAsLongAsMet && anyIncludeMet,
     asLongAsResults,
     includeResults,
     excludeResults,
+    evaluationTime,
   };
+}
+
+/**
+ * Combine multiple condition objects into a single ShouldRunConditions object
+ * @param conditionObjects Array of ShouldRunConditions objects to combine
+ * @returns A combined ShouldRunConditions object
+ * @example
+ * ```ts
+ * const combinedConditions = combineConditionObjects([
+ *   { include: [isGitHubPage] },
+ *   { asLongAs: [isAuthenticated] },
+ *   { exclude: [is404Page] }
+ * ]);
+ * ```
+ */
+export function combineConditionObjects(conditionObjects: ShouldRunConditions[]): ShouldRunConditions {
+  if (!Array.isArray(conditionObjects)) {
+    throw new TypeError('conditionObjects must be an array');
+  }
+
+  const combined: ShouldRunConditions = {
+    asLongAs: [],
+    include: [],
+    exclude: [],
+  };
+
+  for (const obj of conditionObjects) {
+    if (obj.asLongAs) {
+      combined.asLongAs!.push(...obj.asLongAs);
+    }
+    if (obj.include) {
+      combined.include!.push(...obj.include);
+    }
+    if (obj.exclude) {
+      combined.exclude!.push(...obj.exclude);
+    }
+  }
+
+  // Ensure we have default conditions if none were provided
+  if (combined.asLongAs!.length === 0) {
+    combined.asLongAs = [() => true];
+  }
+  if (combined.include!.length === 0) {
+    combined.include = [() => true];
+  }
+  if (combined.exclude!.length === 0) {
+    combined.exclude = [() => false];
+  }
+
+  return combined;
 }
