@@ -15,6 +15,11 @@ export type GithubTheme = 'light' | 'dark';
 export type GithubColorMode = 'auto' | 'light' | 'dark';
 
 /**
+ * GitHub theme type values
+ */
+export type GithubThemeType = 'light' | 'dark' | 'dimmed' | 'high_contrast';
+
+/**
  * GitHub theme configuration from DOM attributes
  */
 export interface GithubThemeConfig {
@@ -30,12 +35,35 @@ export interface GithubThemeConfig {
    * Dark theme identifier
    */
   darkTheme?: string;
+  /**
+   * Current theme name
+   */
+  currentTheme?: string;
+  /**
+   * Theme type (light, dark, dimmed, high_contrast)
+   */
+  themeType?: GithubThemeType;
 }
+
+/**
+ * Theme change callback type
+ */
+export type ThemeChangeCallback = (theme: GithubTheme, config: GithubThemeConfig) => void;
+
+/**
+ * Theme change listeners
+ */
+let themeChangeListeners: ThemeChangeCallback[] = [];
 
 /**
  * Cache the theme result to avoid repeated DOM queries
  */
 let cachedTheme: GithubTheme | null = null;
+
+/**
+ * Cache the theme configuration
+ */
+let cachedThemeConfig: GithubThemeConfig | null = null;
 
 /**
  * Extracts GitHub theme configuration from DOM attributes
@@ -52,11 +80,24 @@ const extractThemeConfig = (): GithubThemeConfig => {
   const colorMode = (htmlElement.dataset.colorMode as GithubColorMode) || 'auto';
   const lightTheme = htmlElement.dataset.lightTheme;
   const darkTheme = htmlElement.dataset.darkTheme;
+  const currentTheme = htmlElement.dataset.theme;
+
+  // Determine theme type from current theme name
+  let themeType: GithubThemeType = 'light';
+  if (currentTheme?.includes('dark')) {
+    themeType = 'dark';
+  } else if (currentTheme?.includes('dimmed')) {
+    themeType = 'dimmed';
+  } else if (currentTheme?.includes('high_contrast')) {
+    themeType = 'high_contrast';
+  }
 
   return {
     colorMode,
     lightTheme,
     darkTheme,
+    currentTheme,
+    themeType,
   };
 };
 
@@ -66,7 +107,19 @@ const extractThemeConfig = (): GithubThemeConfig => {
  * @returns Effective GitHub theme (light or dark)
  */
 const determineEffectiveTheme = (config: GithubThemeConfig): GithubTheme => {
-  const { colorMode, lightTheme, darkTheme } = config;
+  const { colorMode, lightTheme, darkTheme, currentTheme, themeType } = config;
+
+  // If we have a direct theme type, use it
+  if (themeType === 'dark' || themeType === 'dimmed' || themeType === 'high_contrast') {
+    return 'dark';
+  }
+
+  // If current theme is explicitly set, use it
+  if (currentTheme) {
+    return currentTheme.includes('dark') || currentTheme.includes('dimmed') || currentTheme.includes('high_contrast')
+      ? 'dark'
+      : 'light';
+  }
 
   // Check if system preference is dark
   const isSystemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -118,6 +171,9 @@ export default function getGithubTheme(): GithubTheme | undefined {
     // Extract theme configuration from DOM
     const config = extractThemeConfig();
 
+    // Cache the configuration
+    cachedThemeConfig = config;
+
     // Determine effective theme
     const effectiveTheme = determineEffectiveTheme(config);
 
@@ -135,6 +191,43 @@ export default function getGithubTheme(): GithubTheme | undefined {
 }
 
 /**
+ * Get detailed GitHub theme configuration
+ * @returns GitHub theme configuration object if on GitHub, undefined otherwise
+ * @example
+ * ```ts
+ * // Get detailed theme configuration
+ * const config = getGithubThemeConfig();
+ * if (config) {
+ *   console.log(`Color mode: ${config.colorMode}`);
+ *   console.log(`Current theme: ${config.currentTheme}`);
+ * }
+ * ```
+ */
+export function getGithubThemeConfig(): GithubThemeConfig | undefined {
+  // Return cached config if available
+  if (cachedThemeConfig !== null) {
+    return cachedThemeConfig;
+  }
+
+  // Only run on GitHub
+  if (!isGithub()) {
+    return undefined;
+  }
+
+  try {
+    const config = extractThemeConfig();
+    cachedThemeConfig = config;
+    return config;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`Error getting GitHub theme config: ${errorMessage}`);
+    return {
+      colorMode: 'auto',
+    };
+  }
+}
+
+/**
  * Reset the cached theme, useful for testing or when theme changes dynamically
  * @example
  * ```ts
@@ -144,7 +237,61 @@ export default function getGithubTheme(): GithubTheme | undefined {
  * ```
  */
 export function resetGithubThemeCache(): void {
+  const oldTheme = cachedTheme;
+  const oldConfig = cachedThemeConfig;
+
+  // Clear cache
   cachedTheme = null;
+  cachedThemeConfig = null;
+
+  // Get new theme and config
+  const newTheme = getGithubTheme();
+  const newConfig = getGithubThemeConfig();
+
+  // Notify listeners if theme changed
+  if (newTheme && oldTheme !== newTheme && newConfig) {
+    notifyThemeChangeListeners(newTheme, newConfig);
+  }
+}
+
+/**
+ * Notify all theme change listeners
+ * @param theme New theme
+ * @param config New theme configuration
+ */
+const notifyThemeChangeListeners = (theme: GithubTheme, config: GithubThemeConfig): void => {
+  themeChangeListeners.forEach((listener) => {
+    try {
+      listener(theme, config);
+    } catch (error) {
+      console.error('Error in theme change listener:', error);
+    }
+  });
+};
+
+/**
+ * Add a theme change listener
+ * @param callback Function to call when theme changes
+ * @returns Function to remove the listener
+ * @example
+ * ```ts
+ * // Add theme change listener
+ * const removeListener = addThemeChangeListener((theme, config) => {
+ *   console.log(`Theme changed to ${theme}`);
+ *   console.log(`New config: ${JSON.stringify(config)}`);
+ * });
+ *
+ * // Later, remove the listener when no longer needed
+ * removeListener();
+ * ```
+ */
+export function addThemeChangeListener(callback: ThemeChangeCallback): () => void {
+  themeChangeListeners.push(callback);
+
+  // Return cleanup function
+  return () => {
+    themeChangeListeners = themeChangeListeners.filter((listener) => listener !== callback);
+  };
 }
 
 /**
@@ -163,6 +310,18 @@ export function listenForThemeChanges(): () => void {
   // Add event listener for system color scheme changes
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
+  // Add MutationObserver to watch for theme attribute changes
+  const observer = new MutationObserver(() => {
+    resetGithubThemeCache();
+  });
+
+  if (document.documentElement) {
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-color-mode', 'data-light-theme', 'data-dark-theme', 'data-theme'],
+    });
+  }
+
   const handleThemeChange = () => {
     resetGithubThemeCache();
   };
@@ -172,6 +331,7 @@ export function listenForThemeChanges(): () => void {
   // Return cleanup function
   return () => {
     mediaQuery.removeEventListener('change', handleThemeChange);
+    observer.disconnect();
   };
 }
 
@@ -205,4 +365,82 @@ export function isDarkTheme(): boolean {
 export function isLightTheme(): boolean {
   const theme = getGithubTheme();
   return theme === 'light';
+}
+
+/**
+ * Check if the current theme is dimmed
+ * @returns True if theme is dimmed, false otherwise
+ * @example
+ * ```ts
+ * // Check if current theme is dimmed
+ * if (isDimmedTheme()) {
+ *   // Render content optimized for dimmed theme
+ * }
+ * ```
+ */
+export function isDimmedTheme(): boolean {
+  const config = getGithubThemeConfig();
+  return config?.themeType === 'dimmed';
+}
+
+/**
+ * Check if the current theme is high contrast
+ * @returns True if theme is high contrast, false otherwise
+ * @example
+ * ```ts
+ * // Check if current theme is high contrast
+ * if (isHighContrastTheme()) {
+ *   // Render content optimized for high contrast
+ * }
+ * ```
+ */
+export function isHighContrastTheme(): boolean {
+  const config = getGithubThemeConfig();
+  return config?.themeType === 'high_contrast';
+}
+
+/**
+ * Get the current theme type
+ * @returns Theme type if on GitHub, undefined otherwise
+ * @example
+ * ```ts
+ * // Get current theme type
+ * const themeType = getGithubThemeType();
+ * if (themeType) {
+ *   console.log(`Current theme type: ${themeType}`);
+ * }
+ * ```
+ */
+export function getGithubThemeType(): GithubThemeType | undefined {
+  const config = getGithubThemeConfig();
+  return config?.themeType;
+}
+
+/**
+ * Get the current color mode
+ * @returns Color mode if on GitHub, undefined otherwise
+ * @example
+ * ```ts
+ * // Get current color mode
+ * const colorMode = getGithubColorMode();
+ * if (colorMode) {
+ *   console.log(`Current color mode: ${colorMode}`);
+ * }
+ * ```
+ */
+export function getGithubColorMode(): GithubColorMode | undefined {
+  const config = getGithubThemeConfig();
+  return config?.colorMode;
+}
+
+/**
+ * Clear all theme change listeners
+ * @example
+ * ```ts
+ * // Clear all theme change listeners
+ * clearThemeChangeListeners();
+ * ```
+ */
+export function clearThemeChangeListeners(): void {
+  themeChangeListeners = [];
 }
