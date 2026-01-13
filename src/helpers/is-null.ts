@@ -1,17 +1,47 @@
 /**
- * @zh-CN 检查值是否为null或undefined
- * @en-US Check if value is null or undefined
+ * Null and empty value utilities
+ * @zh-CN 空值和空对象工具
  */
-export function isNull<T>(value: T | null | undefined): value is null | undefined {
+
+/**
+ * Check if a value is null or undefined
+ * @param value The value to check
+ * @returns Boolean indicating if the value is null or undefined
+ * @example
+ * ```ts
+ * isNil(null); // true
+ * isNil(undefined); // true
+ * isNil(0); // false
+ * isNil(''); // false
+ * ```
+ */
+export function isNil(value: unknown): boolean {
   return value === null || typeof value === 'undefined';
 }
 
 /**
- * @zh-CN 检查值是否为空
- * @en-US Check if value is empty
+ * Check if a value is null (alias for isNil for backward compatibility)
+ * @deprecated Use isNil instead for better clarity
  */
-export function isEmpty<T>(value: T | null | undefined): boolean {
-  if (isNull(value)) {
+export function isNull(value: unknown): boolean {
+  return isNil(value);
+}
+
+/**
+ * Check if a value is empty
+ * @param value The value to check
+ * @returns Boolean indicating if the value is empty
+ * @example
+ * ```ts
+ * isEmpty(''); // true
+ * isEmpty([]); // true
+ * isEmpty({}); // true
+ * isEmpty(0); // false
+ * isEmpty('hello'); // false
+ * ```
+ */
+export function isEmpty(value: unknown): boolean {
+  if (isNil(value)) {
     return true;
   }
 
@@ -23,11 +53,12 @@ export function isEmpty<T>(value: T | null | undefined): boolean {
     return value.length === 0;
   }
 
-  if (value instanceof Map || value instanceof Set) {
-    return value.size === 0;
-  }
-
   if (typeof value === 'object') {
+    // Check for Map and Set types
+    if (value instanceof Map || value instanceof Set) {
+      return value.size === 0;
+    }
+    // Check for plain objects
     return Object.keys(value).length === 0;
   }
 
@@ -35,97 +66,85 @@ export function isEmpty<T>(value: T | null | undefined): boolean {
 }
 
 /**
- * @zh-CN 检查值是否为falsy
- * @en-US Check if value is falsy
+ * Check if a value is truthy (not null, undefined, empty string, empty array, or empty object)
+ * @param value The value to check
+ * @returns Boolean indicating if the value is truthy
+ * @example
+ * ```ts
+ * isTruthy('hello'); // true
+ * isTruthy([1, 2, 3]); // true
+ * isTruthy({ key: 'value' }); // true
+ * isTruthy(''); // false
+ * isTruthy(null); // false
+ * ```
  */
-export function isFalsy<T>(value: T | null | undefined): boolean {
-  return isNull(value) || isEmpty(value);
+export function isTruthy(value: unknown): boolean {
+  return !isNil(value) && !isEmpty(value);
 }
 
 /**
- * @zh-CN 检查对象所有值是否为null或undefined
- * @en-US Check if all values in object are null or undefined
+ * Check if a value is falsy (null, undefined, empty string, empty array, or empty object)
+ * @param value The value to check
+ * @returns Boolean indicating if the value is falsy
+ * @example
+ * ```ts
+ * isFalsy(''); // true
+ * isFalsy([]); // true
+ * isFalsy(null); // true
+ * isFalsy('hello'); // false
+ * isFalsy([1, 2, 3]); // false
+ * ```
  */
-export function isAllNull<T extends Record<string, any>>(obj: T): boolean {
-  return Object.values(obj).every(isNull);
+export function isFalsy(value: unknown): boolean {
+  return isNil(value) || isEmpty(value);
 }
 
 /**
- * @zh-CN 检查对象所有值是否为空
- * @en-US Check if all values in object are empty
+ * Check if all values in an object are null or undefined
+ * @param obj The object to check
+ * @returns Boolean indicating if all values are null or undefined
+ * @example
+ * ```ts
+ * isAllNil({ a: null, b: undefined }); // true
+ * isAllNil({ a: null, b: 'value' }); // false
+ * ```
  */
-export function isAllEmpty<T extends Record<string, any>>(obj: T): boolean {
+export function isAllNil(obj: Record<string, unknown>): boolean {
+  return Object.values(obj).every(isNil);
+}
+
+/**
+ * Check if all values in an object are null or undefined (alias for isAllNil)
+ * @deprecated Use isAllNil instead for better clarity
+ */
+export function isAllNull(obj: Record<string, unknown>): boolean {
+  return isAllNil(obj);
+}
+
+/**
+ * Check if all values in an object are empty
+ * @param obj The object to check
+ * @returns Boolean indicating if all values are empty
+ * @example
+ * ```ts
+ * isAllEmpty({ a: '', b: [] }); // true
+ * isAllEmpty({ a: '', b: 'value' }); // false
+ * ```
+ */
+export function isAllEmpty(obj: Record<string, unknown>): boolean {
   return Object.values(obj).every(isEmpty);
 }
 
 /**
- * @zh-CN 检查对象所有值是否为falsy
- * @en-US Check if all values in object are falsy
+ * Check if all values in an object are falsy
+ * @param obj The object to check
+ * @returns Boolean indicating if all values are falsy
+ * @example
+ * ```ts
+ * isAllFalsy({ a: '', b: null }); // true
+ * isAllFalsy({ a: '', b: 'value' }); // false
+ * ```
  */
-export function isAllFalsy<T extends Record<string, any>>(obj: T): boolean {
+export function isAllFalsy(obj: Record<string, unknown>): boolean {
   return Object.values(obj).every(isFalsy);
-}
-
-/**
- * @zh-CN 检查值是否为字符串
- * @en-US Check if value is a string
- */
-export function isString(value: any): value is string {
-  return typeof value === 'string';
-}
-
-/**
- * @zh-CN 检查值是否为数字
- * @en-US Check if value is a number
- */
-export function isNumber(value: any): value is number {
-  return typeof value === 'number' && !isNaN(value);
-}
-
-/**
- * @zh-CN 检查值是否为布尔值
- * @en-US Check if value is a boolean
- */
-export function isBoolean(value: any): value is boolean {
-  return typeof value === 'boolean';
-}
-
-/**
- * @zh-CN 检查值是否为数组
- * @en-US Check if value is an array
- */
-export function isArray<T>(value: any): value is T[] {
-  return Array.isArray(value);
-}
-
-/**
- * @zh-CN 检查值是否为对象
- * @en-US Check if value is an object
- */
-export function isObject(value: any): value is Record<string, any> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/**
- * @zh-CN 检查值是否为函数
- * @en-US Check if value is a function
- */
-export function isFunction(value: any): value is Function {
-  return typeof value === 'function';
-}
-
-/**
- * @zh-CN 检查值是否为Promise
- * @en-US Check if value is a Promise
- */
-export function isPromise<T>(value: any): value is Promise<T> {
-  return value instanceof Promise || (typeof value === 'object' && value !== null && typeof value.then === 'function');
-}
-
-/**
- * @zh-CN 检查值是否为Date对象
- * @en-US Check if value is a Date object
- */
-export function isDate(value: any): value is Date {
-  return value instanceof Date && !isNaN(value.getTime());
 }
