@@ -9,6 +9,37 @@ export type FeatureId = `hypercrx-${string}`;
 import { importedFeatures } from '../README.md';
 
 /**
+ * Deep copy function to prevent unintended mutations
+ * @param obj Object to deep copy
+ * @returns Deep copied object
+ */
+const deepCopy = <T>(obj: T): T => {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+
+  if (obj instanceof Date) {
+    return new Date(obj.getTime()) as unknown as T;
+  }
+
+  if (obj instanceof Array) {
+    return obj.map((item) => deepCopy(item)) as unknown as T;
+  }
+
+  if (typeof obj === 'object') {
+    const copiedObj: Record<string, any> = {};
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        copiedObj[key] = deepCopy(obj[key]);
+      }
+    }
+    return copiedObj as T;
+  }
+
+  return obj;
+};
+
+/**
  * Default options for the extension
  */
 export const defaults = Object.assign(
@@ -83,6 +114,11 @@ export interface OptionsStorageInterface {
     keys: K | K[],
     callback: (changes: Partial<HypercrxOptions>) => void
   ): () => void;
+
+  /**
+   * Clear the internal cache
+   */
+  clearCache(): void;
 }
 
 /**
@@ -100,21 +136,21 @@ class OptionsStorage implements OptionsStorageInterface {
     try {
       // Return from cache if available
       if (this.cache) {
-        return this.cache;
+        return deepCopy(this.cache);
       }
 
       // Read from storage with defaults
       const options = await chrome.storage.sync.get(defaults);
       const typedOptions = options as HypercrxOptions;
 
-      // Cache the result
-      this.cache = typedOptions;
+      // Cache the result with deep copy to prevent unintended mutations
+      this.cache = deepCopy(typedOptions);
 
-      return typedOptions;
+      return deepCopy(this.cache);
     } catch (error) {
       console.error('Error getting all options:', error);
-      // Return defaults if storage read fails
-      return defaults;
+      // Return deep copy of defaults if storage read fails
+      return deepCopy(defaults);
     }
   }
 
@@ -135,11 +171,13 @@ class OptionsStorage implements OptionsStorageInterface {
    */
   public async set(options: Partial<HypercrxOptions>): Promise<void> {
     try {
-      await chrome.storage.sync.set(options);
+      // Create a deep copy of options to store
+      const optionsToStore = deepCopy(options);
+      await chrome.storage.sync.set(optionsToStore);
 
       // Update cache if it exists
       if (this.cache) {
-        this.cache = { ...this.cache, ...options };
+        this.cache = { ...this.cache, ...optionsToStore };
       }
     } catch (error) {
       console.error('Error setting options:', error);
@@ -163,8 +201,9 @@ class OptionsStorage implements OptionsStorageInterface {
    */
   public async reset(): Promise<void> {
     try {
+      // Clear storage first
       await chrome.storage.sync.clear();
-      // Clear cache
+      // Clear cache to ensure fresh data on next getAll() call
       this.cache = null;
     } catch (error) {
       console.error('Error resetting options:', error);
@@ -185,6 +224,13 @@ class OptionsStorage implements OptionsStorageInterface {
       console.error('Error clearing options:', error);
       throw error;
     }
+  }
+
+  /**
+   * Clear the internal cache
+   */
+  public clearCache(): void {
+    this.cache = null;
   }
 
   /**
@@ -216,7 +262,8 @@ class OptionsStorage implements OptionsStorageInterface {
           this.cache = { ...this.cache, ...relevantChanges };
         }
 
-        callback(relevantChanges);
+        // Pass deep copy to callback to prevent unintended mutations
+        callback(deepCopy(relevantChanges));
       }
     };
 
