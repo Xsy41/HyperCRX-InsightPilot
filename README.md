@@ -42,3 +42,33 @@ HyperCRX-InsightPilot 是一款面向 GitHub / Gitee 的智能浏览器扩展，
 - Issue 响应效率是否出现变化？
 
 系统会结合多维数据进行推理，并提供可解释的洞察建议，实现从数据到决策的完整闭环。
+
+## 启动方式
+
+### Requirements
+
+1. node >= 20
+
+2. yarn
+
+### 快速开始
+
+1. git clone https://github.com/Xsy41/HyperCRX-InsightPilot
+
+2. cd HyperCRX-InsightPilot
+
+3. yarn install
+
+4. yarn run start
+
+5. 按以下步骤在 Chrome 中加载刚刚构建好的未打包扩展:
+
+   1. 访问 chrome://extensions/
+
+   2. 打开右上角的 “开发者模式（Developer mode）”
+
+   3. 点击 “加载已解压的扩展程序（Load unpacked extension）”
+
+   4. 选择项目根目录下的 build 文件夹
+
+   5. 保持 “service worker” 的 DevTools 页面处于打开状态
