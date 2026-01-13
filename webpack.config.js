@@ -90,7 +90,12 @@ let options = {
         loader: 'html-loader',
         exclude: /node_modules/,
       },
-      { test: /\.(ts|tsx)$/, loader: 'ts-loader', exclude: /node_modules/ },
+      {
+        test: /\.(ts|tsx)$/,
+        loader: 'ts-loader',
+        exclude: /node_modules/,
+        options: { configFile: path.resolve(__dirname, 'tsconfig.json') },
+      },
       {
         test: /\.(js|jsx)$/,
         use: [
