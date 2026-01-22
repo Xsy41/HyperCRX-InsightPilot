@@ -139,7 +139,22 @@ const View = ({ currentRepo, issueDetail, meta }: Props): JSX.Element | null => 
   const handleAISummary = async () => {
     setAiLoading(true);
     try {
-      const summary = generateLocalSummary();
+      const localSummary = generateLocalSummary();
+
+      // 走本地后端（更安全：API Key 不下发到前端/插件）
+      const resp = await fetch('http://localhost:5001/api/issue-trend-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repoName: currentRepo,
+          data: generateData(issueDetail, meta.updatedAt),
+          localSummary,
+        }),
+      })
+        .then((r) => r.json())
+        .catch(() => ({}));
+
+      const summary = resp?.summary || localSummary;
       setAiSummary(summary);
     } finally {
       setAiLoading(false);

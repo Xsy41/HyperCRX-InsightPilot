@@ -50,11 +50,41 @@ const OpenrankView = ({ openrank, meta }: Props): JSX.Element | null => {
   const handleAISummary = async () => {
     setAiLoading(true);
     try {
+      // 调用后端 API 使用模版系统生成解读
+      const resp = await fetch('http://localhost:5001/api/openrank-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repoName: '', // 可以从 context 获取
+          data: openrankData,
+        }),
+      })
+        .then((r) => {
+          if (!r.ok) {
+            console.error('OpenRank AI API 错误:', r.status, r.statusText);
+            return null;
+          }
+          return r.json();
+        })
+        .catch((err) => {
+          console.error('OpenRank AI API 请求失败:', err);
+          return null;
+        });
+
+      const summary = resp?.summary;
+      if (summary) {
+        setAiSummary(summary);
+      } else {
+        // 如果 API 失败，显示错误信息或使用回退
+        const errorMsg = resp?.error || '无法连接到后端服务，请确保后端已启动（http://localhost:5001）';
+        console.error('OpenRank AI 解读失败:', errorMsg);
+        const info = lastTwo(openrankData);
+        setAiSummary(`基于最近6个月（截至 ${info.curMonth}）的 OpenRank 数据，项目的外部影响力呈现一定变化趋势。\n\n[提示: ${errorMsg}]`);
+      }
+    } catch (error) {
+      console.error('OpenRank AI 解读异常:', error);
       const info = lastTwo(openrankData);
-      const text = `基于最近6个月（截至 ${info.curMonth}）的 OpenRank：
-        OpenRank整体呈现“阶梯式上行+高位波动”特征：前期接近零值，中期开始抬升并形成多次峰值，近段时间维持在较高区间但存在显著波动。
-        说明项目的外部影响力（被讨论、被引用、被关注等）在阶段性触达后得到放大，但曝光与外部互动并非线性增长，受版本发布、话题传播、外部引用等事件驱动明显。`;
-      setAiSummary(text);
+      setAiSummary(`基于最近6个月（截至 ${info.curMonth}）的 OpenRank 数据，项目的外部影响力呈现一定变化趋势。\n\n[错误: 请检查后端服务是否正常运行]`);
     } finally {
       setAiLoading(false);
     }
