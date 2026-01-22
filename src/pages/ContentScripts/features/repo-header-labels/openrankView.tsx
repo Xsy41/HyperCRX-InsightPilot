@@ -51,7 +51,7 @@ const OpenrankView = ({ openrank, meta }: Props): JSX.Element | null => {
     setAiLoading(true);
     try {
       // 调用后端 API 使用模版系统生成解读
-      const resp = await fetch('http://localhost:5001/api/openrank-ai', {
+      const resp = await fetch(API_ENDPOINTS.OPENRANK_AI, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

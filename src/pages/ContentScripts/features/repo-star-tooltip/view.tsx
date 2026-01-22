@@ -8,6 +8,7 @@ import TooltipTrigger from '../../../../components/TooltipTrigger';
 import { useTranslation } from 'react-i18next';
 import '../../../../helpers/i18n';
 import isGithub from '../../../../helpers/is-github';
+import { API_ENDPOINTS } from '../../../../config/api';
 const theme = isGithub() ? getGithubTheme() : 'light';
 
 interface Props {
@@ -35,7 +36,7 @@ const View = ({ stars, meta }: Props): JSX.Element | null => {
       const starData = generateDataByMonth(stars, meta.updatedAt);
       
       // 调用后端 API 使用模版系统生成解读
-      const resp = await fetch('http://localhost:5001/api/star-ai', {
+      const resp = await fetch(API_ENDPOINTS.STAR_AI, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
