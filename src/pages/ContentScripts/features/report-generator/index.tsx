@@ -121,6 +121,7 @@ const ReportButton: React.FC = () => {
   const handleClick = async () => {
     if (loading) return;
     setLoading(true);
+    setLoadingMessage('正在获取数据...');
     try {
       const repo = getRepoName();
       const platform = getPlatform();
@@ -702,11 +703,14 @@ ${longInsight}
 ---
 `;
 
+      setLoadingMessage('正在打开编辑器...');
       const Stackedit = require('stackedit-js');
       const stackedit = new Stackedit();
       stackedit.openFile({ content: { text: md } });
+      setLoadingMessage('');
     } finally {
       setLoading(false);
+      setLoadingMessage('');
     }
   };
 
@@ -734,7 +738,7 @@ ${longInsight}
         }}
         disabled={loading}
       >
-        {loading ? '生成中…' : '生成项目报告'}
+        {loading ? (loadingMessage || '生成中…') : '生成项目报告'}
       </button>
     </>
   );
