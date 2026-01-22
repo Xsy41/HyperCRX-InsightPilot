@@ -39,7 +39,13 @@ const ReportButton: React.FC = () => {
     async function renderTrendChart() {
       const echarts = await import('echarts');
       if (!chartRef.current) return;
-      const months = ['2025-04', '2025-05', '2025-06', '2025-07', '2025-08', '2025-09'];
+      // 动态生成最近6个月的预览数据
+      const now = new Date();
+      const months: string[] = [];
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        months.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+      }
       const option = {
         title: { text: '近六个月核心指标趋势', left: 'center', top: 8, textStyle: { fontSize: 14 } },
         legend: { data: ['Activity', 'OpenRank', 'Star', 'Fork', '贡献者'], top: 30 },
@@ -486,12 +492,6 @@ const ReportButton: React.FC = () => {
         const starsVals = getvalues(stars);
         const forksVals = getvalues(forks);
         const contribVals = getvalues(contributor);
-        console.log('months', months);
-        console.log('activityVals', activityVals);
-        console.log('openrankVals', openrankVals);
-        console.log('starsVals', starsVals);
-        console.log('forksVals', forksVals);
-        console.log('contribVals', contribVals);
 
         // 判空逻辑
         const isAllEmpty =
@@ -583,7 +583,6 @@ const ReportButton: React.FC = () => {
         const star6 = getvalues(stars);
         const fork6 = getvalues(forks);
         const contributor6 = getvalues(contributor);
-        console.log(activity6);
         chart.setOption({
           title: { text: '近6个月核心指标趋势', left: 'center', top: 8, textStyle: { fontSize: 14 } },
           legend: { data: ['Activity', 'OpenRank', 'Star', 'Fork', '贡献者'], top: 30 },

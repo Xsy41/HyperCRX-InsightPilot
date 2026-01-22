@@ -4,18 +4,27 @@ import json
 import math
 import statistics
 import re
+import logging
 import requests  # 导入requests库
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 from flask_cors import CORS
 from pathlib import Path
 
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # 仅加载当前后端目录下的 .env，避免向上递归查找导致的权限问题
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
 # --- DeepSeek (OpenAI-compatible) 调用封装 ---
 # DeepSeek API 默认配置（可通过环境变量覆盖）
-DEFAULT_DEEPSEEK_API_KEY = "sk-13268bc72ac34d64a2195ca5156e9576"
+# 注意：生产环境必须通过环境变量设置 DEEPSEEK_API_KEY，不要使用默认值
+DEFAULT_DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")  # 从环境变量读取，不硬编码
 DEFAULT_DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
 
 def call_deepseek_chat(messages, model: str = "deepseek-chat"):
@@ -48,10 +57,10 @@ def call_deepseek_chat(messages, model: str = "deepseek-chat"):
         content = data["choices"][0]["message"]["content"]
         return (content or "").strip(), None
     except requests.exceptions.RequestException as e:
-        print(f"请求 DeepSeek API 网络错误: {e}")
+        logger.error(f"请求 DeepSeek API 网络错误: {e}")
         return None, f"调用 DeepSeek API 网络错误: {e}"
     except Exception as e:
-        print(f"解析 DeepSeek API 返回时发生错误: {e}")
+        logger.error(f"解析 DeepSeek API 返回时发生错误: {e}")
         return None, f"解析 DeepSeek API 返回时发生错误: {e}"
 
 # --- 封装大模型调用 (使用 DeepSeek API) ---
@@ -653,7 +662,7 @@ def openrank_ai():
         repo_name = body.get("repoName") or ""
         data = body.get("data") or []
 
-        print(f"[OpenRank AI] 收到请求，数据长度: {len(data)}")
+        logger.info(f"[OpenRank AI] 收到请求，仓库: {repo_name}, 数据长度: {len(data)}")
 
         if not data:
             return jsonify({"error": "缺少 OpenRank 数据"}), 400
@@ -664,15 +673,15 @@ def openrank_ai():
 
         # 分析数据特征
         characteristics = analyze_trend_characteristics(data)
-        print(f"[OpenRank AI] 数据特征: {characteristics}")
+        logger.debug(f"[OpenRank AI] 数据特征: {characteristics}")
         
         # 路由到合适的模版
         template_name = route_openrank_template(characteristics)
-        print(f"[OpenRank AI] 选择的模版: {template_name}")
+        logger.info(f"[OpenRank AI] 选择的模版: {template_name}")
         template = load_template("openrank", template_name)
         
         if not template:
-            print(f"[OpenRank AI] 错误: 模版 {template_name} 不存在")
+            logger.error(f"[OpenRank AI] 错误: 模版 {template_name} 不存在")
             return jsonify({"error": f"模版 {template_name} 不存在"}), 500
 
         # 准备模版变量
@@ -682,23 +691,18 @@ def openrank_ai():
             curve_features = format_curve_features(characteristics, data)
             # 提供完整数据列表，让 AI 基于实际数据解读
             data_details = "\n".join([f"  {month}: {value:.2f}" for month, value in data])
-            # 最近6个月的数据（用于数据确认部分）
-            recent_6_months = data[-6:] if len(data) >= 6 else data
-            recent_summary = "\n".join([f"  {month}: {value:.2f}" for month, value in recent_6_months])
         else:
             time_range = "未知"
             months = 0
             curve_features = "无数据"
             data_details = "无数据"
-            recent_summary = "无数据"
 
         # 填充模版
         user_prompt = template["user_prompt_template"].format(
             time_range=time_range,
             months=months,
             curve_features=curve_features,
-            data_details=data_details,
-            recent_summary=recent_summary
+            data_details=data_details
         )
 
         # 调用 AI
@@ -707,13 +711,13 @@ def openrank_ai():
             {"role": "user", "content": user_prompt}
         ]
         
-        print(f"[OpenRank AI] 调用 DeepSeek API...")
+        logger.info(f"[OpenRank AI] 调用 DeepSeek API...")
         answer, err = call_deepseek_chat(messages)
         if err:
-            print(f"[OpenRank AI] DeepSeek API 错误: {err}")
+            logger.error(f"[OpenRank AI] DeepSeek API 错误: {err}")
             return jsonify({"error": err}), 502
         
-        print(f"[OpenRank AI] 生成成功，长度: {len(answer) if answer else 0}")
+        logger.info(f"[OpenRank AI] 生成成功，长度: {len(answer) if answer else 0}")
         return jsonify({
             "summary": answer,
             "template": template_name,
@@ -721,9 +725,7 @@ def openrank_ai():
             "characteristics": characteristics
         })
     except Exception as e:
-        print(f"[OpenRank AI] 异常: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception(f"[OpenRank AI] 异常: {str(e)}")
         return jsonify({"error": f"服务器内部错误: {str(e)}"}), 500
 
 
@@ -745,7 +747,7 @@ def star_ai():
         repo_name = body.get("repoName") or ""
         data = body.get("data") or []
 
-        print(f"[Star AI] 收到请求，数据长度: {len(data)}")
+        logger.info(f"[Star AI] 收到请求，仓库: {repo_name}, 数据长度: {len(data)}")
 
         if not data:
             return jsonify({"error": "缺少 Star 数据"}), 400
@@ -756,15 +758,15 @@ def star_ai():
 
         # 分析数据特征
         characteristics = analyze_trend_characteristics(data)
-        print(f"[Star AI] 数据特征: {characteristics}")
+        logger.debug(f"[Star AI] 数据特征: {characteristics}")
         
         # 路由到合适的模版
         template_name = route_star_template(characteristics, data)
-        print(f"[Star AI] 选择的模版: {template_name}")
+        logger.info(f"[Star AI] 选择的模版: {template_name}")
         template = load_template("star", template_name)
         
         if not template:
-            print(f"[Star AI] 错误: 模版 {template_name} 不存在")
+            logger.error(f"[Star AI] 错误: 模版 {template_name} 不存在")
             return jsonify({"error": f"模版 {template_name} 不存在"}), 500
 
         # 准备模版变量
@@ -774,23 +776,18 @@ def star_ai():
             curve_features = format_curve_features(characteristics, data)
             # 提供完整数据列表，让 AI 基于实际数据解读
             data_details = "\n".join([f"  {month}: {value:.2f}" for month, value in data])
-            # 最近6个月的数据（用于数据确认部分）
-            recent_6_months = data[-6:] if len(data) >= 6 else data
-            recent_summary = "\n".join([f"  {month}: {value:.2f}" for month, value in recent_6_months])
         else:
             time_range = "未知"
             months = 0
             curve_features = "无数据"
             data_details = "无数据"
-            recent_summary = "无数据"
 
         # 填充模版
         user_prompt = template["user_prompt_template"].format(
             time_range=time_range,
             months=months,
             curve_features=curve_features,
-            data_details=data_details,
-            recent_summary=recent_summary
+            data_details=data_details
         )
 
         # 调用 AI
@@ -799,13 +796,13 @@ def star_ai():
             {"role": "user", "content": user_prompt}
         ]
         
-        print(f"[Star AI] 调用 DeepSeek API...")
+        logger.info(f"[Star AI] 调用 DeepSeek API...")
         answer, err = call_deepseek_chat(messages)
         if err:
-            print(f"[Star AI] DeepSeek API 错误: {err}")
+            logger.error(f"[Star AI] DeepSeek API 错误: {err}")
             return jsonify({"error": err}), 502
         
-        print(f"[Star AI] 生成成功，长度: {len(answer) if answer else 0}")
+        logger.info(f"[Star AI] 生成成功，长度: {len(answer) if answer else 0}")
         return jsonify({
             "summary": answer,
             "template": template_name,
@@ -813,9 +810,7 @@ def star_ai():
             "characteristics": characteristics
         })
     except Exception as e:
-        print(f"[Star AI] 异常: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception(f"[Star AI] 异常: {str(e)}")
         return jsonify({"error": f"服务器内部错误: {str(e)}"}), 500
 
 
