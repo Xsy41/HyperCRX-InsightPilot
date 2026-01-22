@@ -32,10 +32,41 @@ const View = ({ stars, meta }: Props): JSX.Element | null => {
   const handleAISummary = async () => {
     setAiLoading(true);
     try {
-      const text = `趋势总览：Star 活动以平稳低位为主，但在23、25时段出现两次高峰，整体呈“事件驱动型爆发”特征。高峰期内可能因版本发布、技术推广或外部传播等引发集体性关注，之后逐步回落。
+      const starData = generateDataByMonth(stars, meta.updatedAt);
+      
+      // 调用后端 API 使用模版系统生成解读
+      const resp = await fetch('http://localhost:5001/api/star-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repoName: '', // 可以从 context 获取
+          data: starData,
+        }),
+      })
+        .then((r) => {
+          if (!r.ok) {
+            console.error('Star AI API 错误:', r.status, r.statusText);
+            return null;
+          }
+          return r.json();
+        })
+        .catch((err) => {
+          console.error('Star AI API 请求失败:', err);
+          return null;
+        });
 
-专业建议：建议对高峰期的拉新动作（如文档/案例/媒体曝光）进行复盘，固化可复用的传播路径；在常态期通过优质内容持续吸引新用户，联动社媒/社区维持曝光底盘，降低热度衰减速度。`;
-      setAiSummary(text);
+      const summary = resp?.summary;
+      if (summary) {
+        setAiSummary(summary);
+      } else {
+        // 如果 API 失败，显示错误信息或使用回退
+        const errorMsg = resp?.error || '无法连接到后端服务，请确保后端已启动（http://localhost:5001）';
+        console.error('Star AI 解读失败:', errorMsg);
+        setAiSummary(`无法生成解读。\n\n[提示: ${errorMsg}]`);
+      }
+    } catch (error) {
+      console.error('Star AI 解读异常:', error);
+      setAiSummary(`无法生成解读。\n\n[错误: 请检查后端服务是否正常运行]`);
     } finally {
       setAiLoading(false);
     }

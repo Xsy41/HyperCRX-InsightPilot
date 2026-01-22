@@ -168,26 +168,86 @@ const ReportButton: React.FC = () => {
         githubRequest(`/repos/${repo}/contributors?per_page=3`),
       ]);
 
-      const payload = {
-        repoName: repo,
-        activity,
-        openrank,
-        attention,
-        participant,
-        contributor,
-        stars,
-        forks,
-        issuesOpened,
-        issuesClosed,
-        issueComments,
-        prOpened,
-        prMerged,
-        prReviews,
-        issueResponseTime,
-        issueResolutionDuration,
+      // 计算报告季度（上一个季度）和对比季度，用于过滤数据
+      const getQuarterMonths = (year: number, quarter: number): string[] => {
+        const startMonth = (quarter - 1) * 3 + 1;
+        return [
+          `${year}-${String(startMonth).padStart(2, '0')}`,
+          `${year}-${String(startMonth + 1).padStart(2, '0')}`,
+          `${year}-${String(startMonth + 2).padStart(2, '0')}`,
+        ];
       };
 
-      // 获取结论与分析
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+      const currentQ = Math.ceil(currentMonth / 3);
+      
+      // 计算报告季度（上一个季度，这是我们要分析的主要季度）
+      let reportQ = currentQ - 1;
+      let reportY = currentYear;
+      if (reportQ < 1) {
+        reportQ = 4;
+        reportY = currentYear - 1;
+      }
+      
+      // 计算对比季度（报告季度的上一季度）
+      let compareQ = reportQ - 1;
+      let compareY = reportY;
+      if (compareQ < 1) {
+        compareQ = 4;
+        compareY = reportY - 1;
+      }
+      
+      // 获取两个季度的所有月份（共6个月）
+      const reportQuarterMonths = getQuarterMonths(reportY, reportQ); // 主要分析的季度
+      const compareQuarterMonths = getQuarterMonths(compareY, compareQ); // 对比季度
+      
+      const quarterMonths = [...compareQuarterMonths, ...reportQuarterMonths];
+      const quarterMonthsSet = new Set(quarterMonths);
+      
+      // 过滤函数：只保留季度相关的月份数据
+      const filterByQuarter = (data: any): any => {
+        if (!data) return data;
+        if (Array.isArray(data)) {
+          return data.filter(([month]: [string, any]) => quarterMonthsSet.has(month));
+        }
+        if (typeof data === 'object') {
+          const filtered: any = {};
+          Object.keys(data).forEach(key => {
+            const month = String(key).replace(/^([0-9]{4})-([0-9]{1,2})$/, (_, y, m) => `${y}-${m.padStart(2, '0')}`);
+            if (quarterMonthsSet.has(month)) {
+              filtered[key] = data[key];
+            }
+          });
+          return filtered;
+        }
+        return data;
+      };
+
+      // 过滤数据，只保留报告季度和对比季度的数据（半年数据）
+      const filteredPayload = {
+        repoName: repo,
+        quarter: `${reportY}Q${reportQ}`,
+        prevQuarter: `${compareY}Q${compareQ}`,
+        activity: filterByQuarter(activity),
+        openrank: filterByQuarter(openrank),
+        attention: filterByQuarter(attention),
+        participant: filterByQuarter(participant),
+        contributor: filterByQuarter(contributor),
+        stars: filterByQuarter(stars),
+        forks: filterByQuarter(forks),
+        issuesOpened: filterByQuarter(issuesOpened),
+        issuesClosed: filterByQuarter(issuesClosed),
+        issueComments: filterByQuarter(issueComments),
+        prOpened: filterByQuarter(prOpened),
+        prMerged: filterByQuarter(prMerged),
+        prReviews: filterByQuarter(prReviews),
+        issueResponseTime: filterByQuarter(issueResponseTime),
+        issueResolutionDuration: filterByQuarter(issueResolutionDuration),
+      };
+
+      // 获取结论与分析（使用完整数据）
       const reportResp = await fetch('http://localhost:5001/api/report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -197,14 +257,17 @@ const ReportButton: React.FC = () => {
         .catch(() => ({}));
       const summary = reportResp?.summary || '';
 
+      // 深度洞察使用过滤后的季度数据
       const analyzeResp = await fetch('http://localhost:5001/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(filteredPayload),
       })
         .then((r) => r.json())
         .catch(() => ({ analysisReport: '' }));
       const longInsight = analyzeResp?.analysisReport || '';
+
+      // 不再单独获取 OpenRank 和 Star 的 AI 解读，只保留综合分析和深度洞察
 
       // 只提取并保留用于核心展示和下游图片的部分变量，其它辅助函数精简（删除调试log与未用到的小函数）
       // 核心里用于图片生成功能、趋势计算的 helpers
@@ -323,25 +386,83 @@ const ReportButton: React.FC = () => {
 
       const arrow = (v: number) => (v > 0 ? '↑' : v < 0 ? '↓' : '→');
       const pctWord = (v: number) => `${arrow(v)} ${plusPct(Math.abs(v))}`;
-      const period = lastMonthFrom(normalizeSeries(openrank) || normalizeSeries(activity))
-        ? `${lastMonthFrom(normalizeSeries(openrank) || normalizeSeries(activity))}-01 ～ ${lastMonthFrom(normalizeSeries(openrank) || normalizeSeries(activity))}-30`
-        : '';
+      
+      // 计算上一个季度报告周期（始终显示上一个季度）
+      const getPreviousQuarterPeriod = (): string => {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1; // 1-12
+        const currentQ = Math.ceil(currentMonth / 3);
+        
+        // 计算上一个季度
+        let prevQ = currentQ - 1;
+        let prevY = currentYear;
+        if (prevQ < 1) {
+          prevQ = 4;
+          prevY = currentYear - 1;
+        }
+        
+        // 计算上一个季度的第一天和最后一天
+        const quarterStartMonth = (prevQ - 1) * 3 + 1;
+        const quarterEndMonth = prevQ * 3;
+        const daysInMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
+        const startMonth = String(quarterStartMonth).padStart(2, '0');
+        const endMonth = String(quarterEndMonth).padStart(2, '0');
+        const startDay = '01';
+        const endDay = String(daysInMonth(prevY, quarterEndMonth)).padStart(2, '0');
+        // 格式：2025-10-01 ～ 2025-12-31
+        return `${prevY}-${startMonth}-${startDay} ～ ${prevY}-${endMonth}-${endDay}`;
+      };
+      
+      const period = getPreviousQuarterPeriod();
       const analyzeDate = new Date().toISOString().slice(0, 10);
-      const nextQ = lastMonthFrom(normalizeSeries(openrank) || normalizeSeries(activity))
-        ? (() => {
-            const [y, m] = lastMonthFrom(normalizeSeries(openrank) || normalizeSeries(activity))
-              .split('-')
-              .map(Number);
-            let q = Math.ceil(m / 3) + 1;
-            let yy = y;
-            if (q > 4) {
-              q = 1;
-              yy += 1;
-            }
-            return `${yy} Q${q}`;
-          })()
-        : '';
-      const nextPeriod = nextQ;
+      
+      // 计算下一个季度（基于报告季度）
+      const calculateNextPeriod = (): string => {
+        try {
+          const now = new Date();
+          const currentYear = now.getFullYear();
+          const currentMonth = now.getMonth() + 1;
+          const currentQ = Math.ceil(currentMonth / 3);
+          
+          // 计算报告季度（上一个季度）
+          let reportQ = currentQ - 1;
+          let reportY = currentYear;
+          if (reportQ < 1) {
+            reportQ = 4;
+            reportY = currentYear - 1;
+          }
+          
+          // 计算下一个季度（报告季度的下一季度）
+          let nextQ = reportQ + 1;
+          let nextY = reportY;
+          if (nextQ > 4) {
+            nextQ = 1;
+            nextY = reportY + 1;
+          }
+          
+          // 确保返回有效的季度格式
+          if (isNaN(nextY) || isNaN(nextQ) || nextQ < 1 || nextQ > 4) {
+            // 如果计算失败，使用当前季度+1作为默认值
+            const defaultQ = currentQ > 3 ? 1 : currentQ + 1;
+            const defaultY = currentQ > 3 ? currentYear + 1 : currentYear;
+            return `${defaultY}Q${defaultQ}`;
+          }
+          
+          return `${nextY}Q${nextQ}`;
+        } catch (error) {
+          // 如果出现任何错误，返回当前季度+1
+          const now = new Date();
+          const currentYear = now.getFullYear();
+          const currentMonth = now.getMonth() + 1;
+          const currentQ = Math.ceil(currentMonth / 3);
+          const defaultQ = currentQ > 3 ? 1 : currentQ + 1;
+          const defaultY = currentQ > 3 ? currentYear + 1 : currentYear;
+          return `${defaultY}Q${defaultQ}`;
+        }
+      };
+      
+      const nextPeriod = calculateNextPeriod();
 
       // 生成6个月趋势图，返回base64图片
       const generateTrendsChartBase64 = async (
@@ -539,23 +660,76 @@ const ReportButton: React.FC = () => {
       const deltaDesc = (v: number) => (v > 0 ? `增加 ${v}` : v < 0 ? `减少 ${Math.abs(v)}` : '持平');
       const pctDesc = (p: number) => `${arrow(p)} ${Math.abs(p)}%`;
 
-      const aiInsight = `概览：
- - 活跃度 ${Math.round(activityInfo.cur)}（环比 ${pctWord(activityInfo.pct)}），OpenRank ${Math.round(openrankInfo.cur * 10) / 10}（环比 ${pctWord(openrankInfo.pct)}）。
- - Star 当月 ${starInfo.cur}（${deltaDesc(starInfo.diff)}，环比 ${pctDesc(starInfo.pct)}），Fork 环比 ${pctWord(forkInfo.pct)}，贡献者 ${contribInfo.cur}（环比 ${pctWord(contribInfo.pct)}）。
- - Issue 开启 ${issueOpenInfo.cur}（环比 ${pctWord(issueOpenInfo.pct)}），关闭 ${issueClosedInfo.cur}（环比 ${pctWord(issueClosedInfo.pct)}），讨论评论 ${issueCommentsInfo.cur}（环比 ${pctWord(issueCommentsInfo.pct)}）。
- - PR 合并率 ${prMergeRateCur}%（环比 ${pctWord(prMergeRateDiff)}），协作效率${prRateTrendWord(prMergeRateDiff)}。
+      // 识别特别值得注意的数据（变化幅度大或异常值）
+      const significantChanges: string[] = [];
+      const notableMetrics: string[] = [];
+      
+      // 判断哪些指标变化显著（阈值：>20% 或 < -20%）
+      if (Math.abs(activityInfo.pct) > 20) {
+        significantChanges.push(`活跃度${trendWord(activityInfo.pct)}（${pctWord(activityInfo.pct)}）`);
+      }
+      if (Math.abs(openrankInfo.pct) > 20) {
+        significantChanges.push(`OpenRank${trendWord(openrankInfo.pct)}（${pctWord(openrankInfo.pct)}）`);
+      }
+      if (Math.abs(starInfo.pct) > 20 || starInfo.pct > 100) {
+        significantChanges.push(`Star${starInfo.pct >= 0 ? '大幅增长' : '显著下降'}（${pctDesc(starInfo.pct)}）`);
+      }
+      if (Math.abs(contribInfo.pct) > 20) {
+        significantChanges.push(`贡献者数量${trendWord(contribInfo.pct)}（${pctWord(contribInfo.pct)}）`);
+      }
+      if (Math.abs(prMergeRateDiff) > 10) {
+        notableMetrics.push(`PR 合并率${prMergeRateDiff > 0 ? '提升' : '下降'}至 ${prMergeRateCur}%（变化 ${prMergeRateDiff > 0 ? '+' : ''}${prMergeRateDiff}%）`);
+      }
+      if (issueOpenInfo.cur > 0 && issueClosedInfo.cur > 0) {
+        const issueRatio = issueClosedInfo.cur / issueOpenInfo.cur;
+        if (issueRatio < 0.5) {
+          notableMetrics.push(`Issue 处理效率偏低（关闭/开启比 ${(issueRatio * 100).toFixed(0)}%）`);
+        } else if (issueRatio > 1.5) {
+          notableMetrics.push(`Issue 处理效率良好（关闭/开启比 ${(issueRatio * 100).toFixed(0)}%）`);
+        }
+      }
+      
+      // 构建总体概述
+      let overview = '';
+      if (significantChanges.length > 0) {
+        overview = `本期项目在以下方面出现显著变化：${significantChanges.join('、')}。`;
+      } else {
+        overview = `本期项目各项指标整体保持相对稳定。`;
+      }
+      
+      if (notableMetrics.length > 0) {
+        overview += `\n\n值得关注：${notableMetrics.join('；')}。`;
+      }
+      
+      // 如果所有指标都很稳定，给出总体评价
+      if (significantChanges.length === 0 && notableMetrics.length === 0) {
+        overview += `\n\n项目运行平稳，建议继续保持当前节奏，同时关注长期趋势变化。`;
+      } else {
+        overview += `\n\n建议结合具体业务场景，针对性地优化相关指标。`;
+      }
 
-按指标解读：
- - Activity：${trendWord(activityInfo.pct)}，说明代码提交/Issue/PR 节奏发生${activityInfo.pct >= 0 ? '提升' : '变化'}。
- - OpenRank：${trendWord(openrankInfo.pct)}，与外部引用、关注度、传播相关，建议结合文档/版本发布节奏联动推广。
- - Star：${starInfo.pct >= 0 ? '热度提升' : '热度回落'}（${pctDesc(starInfo.pct)}），${starInfo.pct >= 0 ? '可复盘传播动作并固化' : '建议加大对外触达与亮点展示'}。
- - Fork：${trendWord(forkInfo.pct)}，代表二次利用与生态扩散${forkInfo.pct >= 0 ? '增强' : '承压'}。
- - 贡献者：${trendWord(contribInfo.pct)}，建议优化 newcomer 路径（good-first-issue、开发脚手架、贡献指南）。
- - Issue：开启/关闭/评论分别为 ${issueOpenInfo.cur}/${issueClosedInfo.cur}/${issueCommentsInfo.cur}，${issueClosedInfo.cur >= issueOpenInfo.cur ? '问题处理净减少' : '问题积压可能上升'}，应关注响应/解决时长。
- - PR 合并率：${prMergeRateCur}%（变化 ${prMergeRateDiff > 0 ? '+' : ''}${prMergeRateDiff}%），${prRateTrendWord(prMergeRateDiff)}，注意质量与效率的平衡。
-`;
+      const aiInsight = overview;
 
-      const md = `# 🗓️ OpenDigger 项目月度报告（${lastMonthFrom(normalizeSeries(openrank) || normalizeSeries(activity)) ? lastMonthFrom(normalizeSeries(openrank) || normalizeSeries(activity)).replace('-', '年') + '月' : ''})
+      // 获取上一个季度标题（始终显示上一个季度）
+      const getPreviousQuarterTitle = (): string => {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1; // 1-12
+        const currentQ = Math.ceil(currentMonth / 3);
+        
+        // 计算上一个季度
+        let prevQ = currentQ - 1;
+        let prevY = currentYear;
+        if (prevQ < 1) {
+          prevQ = 4;
+          prevY = currentYear - 1;
+        }
+        
+        return `${prevY}Q${prevQ}`;
+      };
+      
+      const quarterTitle = getPreviousQuarterTitle();
+      const md = `# 🗓️ OpenDigger 项目季度报告（${quarterTitle || ''}）
 
 > 报告周期：${period}  
 > 数据来源：OpenDigger API  
@@ -586,17 +760,14 @@ const ReportButton: React.FC = () => {
 
 ## 🤖 三、AI 自动解读
 
-本期 **OpenDigger** 项目表现出 “**内部活跃增强、外部影响力略降**” 的组合特征。  
-活跃度的上升反映出团队在功能完善与内部更新方面投入增加；  
-但 **OpenRank 下降** 表明外部社区关注或引用度暂未同步提升。
+### 📈 综合指标分析
 
-**亮点**  
-- Star 数环比增长 700% ，说明项目近期曝光度提升，可能与版本发布、文档更新或社交传播相关。  
-- PR 合并率维持高水平（100%），显示团队协作良好、代码合入高效。
+${aiInsight}
 
-**不足**  
-- Fork 与贡献者数无变化，暗示社区参与尚未转化为实际贡献。  
-- 影响力下降需关注外部生态的互动度。
+${longInsight ? `### 💡 深度洞察
+
+${longInsight}
+` : ''}
 
 ---
 
@@ -642,7 +813,7 @@ const ReportButton: React.FC = () => {
         onClick={handleClick}
         style={{
           position: 'fixed',
-          right: '16px',
+          left: '16px',
           bottom: '16px',
           zIndex: 99999,
           padding: '8px 12px',
