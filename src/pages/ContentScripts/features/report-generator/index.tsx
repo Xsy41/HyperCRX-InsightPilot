@@ -28,6 +28,7 @@ import isGithub from '../../../../helpers/is-github';
 import { githubRequest } from '../../../../api/githubApi';
 import { getMonthlyData } from '../repo-activity-racing-bar/data';
 import generateDataByMonth from '../../../../helpers/generate-data-by-month';
+import { normalizeSeries, monthlyEntries, lastMonthFrom, lastTwoByMonth, formatMonthShort } from './formatting-utils';
 import {
   getPreviousQuarter,
   getNextQuarter,
