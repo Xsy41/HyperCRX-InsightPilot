@@ -41,7 +41,10 @@ const ReportButton: React.FC = () => {
   const [trendImgUrl, setTrendImgUrl] = useState<string | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
 
-  // 自动趋势预览，只做展示
+  /**
+   * 自动趋势预览效果
+   * 在组件挂载时渲染最近6个月的趋势预览图
+   */
   useEffect(() => {
     async function renderTrendChart() {
       const echarts = await import('echarts');
@@ -117,7 +120,20 @@ const ReportButton: React.FC = () => {
     renderTrendChart();
   }, []);
 
-  // handleClick/生成报告部分，完全自包自己的 fetch/变量/逻辑，和 useEffect 内无耦合
+  /**
+   * 处理报告生成点击事件
+   * 
+   * 流程：
+   * 1. 获取仓库数据
+   * 2. 计算季度信息
+   * 3. 过滤季度数据
+   * 4. 调用API获取AI分析
+   * 5. 生成图表
+   * 6. 生成Markdown报告
+   * 7. 打开StackEdit编辑器
+   * 
+   * @throws {Error} 当仓库名称无效或API调用失败时抛出错误
+   */
   const handleClick = async () => {
     if (loading) return;
     setLoading(true);
