@@ -1,6 +1,7 @@
 import { OSS_XLAB_ENDPOINT, ErrorCode } from '../constant';
 import request from '../helpers/request';
 
+// Fetch a metric JSON by mapped name; return null for missing files.
 export const getMetricByName = async (
   platform: string,
   owner: string,
@@ -46,6 +47,7 @@ export interface UserMeta extends CommonMeta {
 
 class MetaStore {
   private static instance: MetaStore;
+  // Cache response promises to avoid duplicate fetches per name.
   private responseCache: Map<string, Promise<Response>>;
   private constructor() {
     this.responseCache = new Map<string, Promise<Response>>();
@@ -102,4 +104,5 @@ class MetaStore {
   }
 }
 
+// Singleton store for meta queries.
 export const metaStore = MetaStore.getInstance();
