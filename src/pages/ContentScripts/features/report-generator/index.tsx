@@ -28,6 +28,13 @@ import isGithub from '../../../../helpers/is-github';
 import { githubRequest } from '../../../../api/githubApi';
 import { getMonthlyData } from '../repo-activity-racing-bar/data';
 import generateDataByMonth from '../../../../helpers/generate-data-by-month';
+import {
+  getPreviousQuarter,
+  getNextQuarter,
+  getQuarterMonths,
+  getQuarterTitle,
+  getQuarterPeriod,
+} from '../../../../helpers/quarter-utils';
 
 const ReportButton: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -175,51 +182,32 @@ const ReportButton: React.FC = () => {
       ]);
 
       // 计算报告季度（上一个季度）和对比季度，用于过滤数据
-      const getQuarterMonths = (year: number, quarter: number): string[] => {
-        const startMonth = (quarter - 1) * 3 + 1;
-        return [
-          `${year}-${String(startMonth).padStart(2, '0')}`,
-          `${year}-${String(startMonth + 1).padStart(2, '0')}`,
-          `${year}-${String(startMonth + 2).padStart(2, '0')}`,
-        ];
-      };
-
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth() + 1;
-      const currentQ = Math.ceil(currentMonth / 3);
-      
-      // 计算报告季度（上一个季度，这是我们要分析的主要季度）
-      let reportQ = currentQ - 1;
-      let reportY = currentYear;
-      if (reportQ < 1) {
-        reportQ = 4;
-        reportY = currentYear - 1;
-      }
-      
-      // 计算对比季度（报告季度的上一季度）
-      let compareQ = reportQ - 1;
-      let compareY = reportY;
-      if (compareQ < 1) {
-        compareQ = 4;
-        compareY = reportY - 1;
-      }
+      const reportQuarter = getPreviousQuarter();
+      const compareQuarter = (() => {
+        let compareQ = reportQuarter.quarter - 1;
+        let compareY = reportQuarter.year;
+        if (compareQ < 1) {
+          compareQ = 4;
+          compareY = reportQuarter.year - 1;
+        }
+        return { year: compareY, quarter: compareQ };
+      })();
       
       // 获取两个季度的所有月份（共6个月）
-      const reportQuarterMonths = getQuarterMonths(reportY, reportQ); // 主要分析的季度
-      const compareQuarterMonths = getQuarterMonths(compareY, compareQ); // 对比季度
+      const reportQuarterMonths = getQuarterMonths(reportQuarter.year, reportQuarter.quarter); // 主要分析的季度
+      const compareQuarterMonths = getQuarterMonths(compareQuarter.year, compareQuarter.quarter); // 对比季度
       
       const quarterMonths = [...compareQuarterMonths, ...reportQuarterMonths];
       const quarterMonthsSet = new Set(quarterMonths);
       
       // 过滤函数：只保留季度相关的月份数据
-      const filterByQuarter = (data: any): any => {
+      const filterByQuarter = (data: SeriesData | TimeSeriesData | null | undefined): SeriesData | TimeSeriesData | null | undefined => {
         if (!data) return data;
         if (Array.isArray(data)) {
-          return data.filter(([month]: [string, any]) => quarterMonthsSet.has(month));
+          return data.filter(([month]: [string, number]) => quarterMonthsSet.has(month)) as TimeSeriesData;
         }
         if (typeof data === 'object') {
-          const filtered: any = {};
+          const filtered: SeriesData = {};
           Object.keys(data).forEach(key => {
             const month = String(key).replace(/^([0-9]{4})-([0-9]{1,2})$/, (_, y, m) => `${y}-${m.padStart(2, '0')}`);
             if (quarterMonthsSet.has(month)) {
@@ -232,10 +220,10 @@ const ReportButton: React.FC = () => {
       };
 
       // 过滤数据，只保留报告季度和对比季度的数据（半年数据）
-      const filteredPayload = {
+      const filteredPayload: FilteredPayload = {
         repoName: repo,
-        quarter: `${reportY}Q${reportQ}`,
-        prevQuarter: `${compareY}Q${compareQ}`,
+        quarter: getQuarterTitle(reportQuarter.year, reportQuarter.quarter),
+        prevQuarter: getQuarterTitle(compareQuarter.year, compareQuarter.quarter),
         activity: filterByQuarter(activity),
         openrank: filterByQuarter(openrank),
         attention: filterByQuarter(attention),
@@ -284,7 +272,7 @@ const ReportButton: React.FC = () => {
 
       // 只提取并保留用于核心展示和下游图片的部分变量，其它辅助函数精简（删除调试log与未用到的小函数）
       // 核心里用于图片生成功能、趋势计算的 helpers
-      const normalizeSeries = (series: any): [string, number][] => {
+      const normalizeSeries = (series: SeriesData | TimeSeriesData | null | undefined): TimeSeriesData => {
         if (!series) return [];
         if (Array.isArray(series)) return series as [string, number][];
         if (typeof series === 'object') {
@@ -301,11 +289,11 @@ const ReportButton: React.FC = () => {
         }
         return [];
       };
-      const monthlyEntries = (raw: any): [string, number][] => {
+      const monthlyEntries = (raw: SeriesData | TimeSeriesData | null | undefined): TimeSeriesData => {
         return normalizeSeries(raw).filter(([k]) => /^\d{4}-\d{2}$/.test(String(k)));
       };
-      const lastMonthFrom = (series: any[]) => (series && series.length ? series[series.length - 1][0] : '');
-      const lastTwoByMonth = (raw: any) => {
+      const lastMonthFrom = (series: TimeSeriesData): string => (series && series.length ? series[series.length - 1][0] : '');
+      const lastTwoByMonth = (raw: SeriesData | TimeSeriesData | null | undefined): LastTwoByMonthResult => {
         const series = monthlyEntries(raw);
         const map = new Map<string, number>();
         series.forEach((it) => {
@@ -323,21 +311,21 @@ const ReportButton: React.FC = () => {
       };
 
       // 从 activity_details（与 racing-bar 一致的月度结构）取当月Top3，否则回退 GitHub /contributors
-      const pickTopContributors = () => {
-        let top: { login: string; commits?: number }[] = [];
+      const pickTopContributors = (): ContributorInfo[] => {
+        let top: ContributorInfo[] = [];
         try {
-          const monthly = getMonthlyData((activityDetails as any) || {});
+          const monthly = getMonthlyData(activityDetails || {});
           const months = Object.keys(monthly)
             .filter((k) => /^\d{4}-\d{2}$/.test(k))
             .sort();
           if (months.length) {
             const last = months[months.length - 1];
-            const arr = (monthly as any)[last] as [string, number][];
+            const arr = monthly[last] as TimeSeriesData | undefined;
             top = (arr || []).slice(0, 3).map((it) => ({ login: it[0], commits: it[1] }));
           }
         } catch {}
         if (!top.length && Array.isArray(ghContributors)) {
-          top = ghContributors.slice(0, 3).map((c: any) => ({ login: c.login, commits: c.contributions }));
+          top = ghContributors.slice(0, 3).map((c) => ({ login: c.login, commits: c.contributions }));
         }
         return top;
       };
@@ -401,81 +389,12 @@ const ReportButton: React.FC = () => {
       const pctWord = (v: number) => `${arrow(v)} ${plusPct(Math.abs(v))}`;
       
       // 计算上一个季度报告周期（始终显示上一个季度）
-      const getPreviousQuarterPeriod = (): string => {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1; // 1-12
-        const currentQ = Math.ceil(currentMonth / 3);
-        
-        // 计算上一个季度
-        let prevQ = currentQ - 1;
-        let prevY = currentYear;
-        if (prevQ < 1) {
-          prevQ = 4;
-          prevY = currentYear - 1;
-        }
-        
-        // 计算上一个季度的第一天和最后一天
-        const quarterStartMonth = (prevQ - 1) * 3 + 1;
-        const quarterEndMonth = prevQ * 3;
-        const daysInMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
-        const startMonth = String(quarterStartMonth).padStart(2, '0');
-        const endMonth = String(quarterEndMonth).padStart(2, '0');
-        const startDay = '01';
-        const endDay = String(daysInMonth(prevY, quarterEndMonth)).padStart(2, '0');
-        // 格式：2025-10-01 ～ 2025-12-31
-        return `${prevY}-${startMonth}-${startDay} ～ ${prevY}-${endMonth}-${endDay}`;
-      };
-      
-      const period = getPreviousQuarterPeriod();
+      const period = getQuarterPeriod(reportQuarter.year, reportQuarter.quarter);
       const analyzeDate = new Date().toISOString().slice(0, 10);
       
       // 计算下一个季度（基于报告季度）
-      const calculateNextPeriod = (): string => {
-        try {
-          const now = new Date();
-          const currentYear = now.getFullYear();
-          const currentMonth = now.getMonth() + 1;
-          const currentQ = Math.ceil(currentMonth / 3);
-          
-          // 计算报告季度（上一个季度）
-          let reportQ = currentQ - 1;
-          let reportY = currentYear;
-          if (reportQ < 1) {
-            reportQ = 4;
-            reportY = currentYear - 1;
-          }
-          
-          // 计算下一个季度（报告季度的下一季度）
-          let nextQ = reportQ + 1;
-          let nextY = reportY;
-          if (nextQ > 4) {
-            nextQ = 1;
-            nextY = reportY + 1;
-          }
-          
-          // 确保返回有效的季度格式
-          if (isNaN(nextY) || isNaN(nextQ) || nextQ < 1 || nextQ > 4) {
-            // 如果计算失败，使用当前季度+1作为默认值
-            const defaultQ = currentQ > 3 ? 1 : currentQ + 1;
-            const defaultY = currentQ > 3 ? currentYear + 1 : currentYear;
-            return `${defaultY}Q${defaultQ}`;
-          }
-          
-          return `${nextY}Q${nextQ}`;
-        } catch (error) {
-          // 如果出现任何错误，返回当前季度+1
-          const now = new Date();
-          const currentYear = now.getFullYear();
-          const currentMonth = now.getMonth() + 1;
-          const currentQ = Math.ceil(currentMonth / 3);
-          const defaultQ = currentQ > 3 ? 1 : currentQ + 1;
-          const defaultY = currentQ > 3 ? currentYear + 1 : currentYear;
-          return `${defaultY}Q${defaultQ}`;
-        }
-      };
-      
-      const nextPeriod = calculateNextPeriod();
+      const nextQuarter = getNextQuarter();
+      const nextPeriod = getQuarterTitle(nextQuarter.year, nextQuarter.quarter);
 
       // 生成6个月趋势图，返回base64图片
       const generateTrendsChartBase64 = async (
@@ -636,7 +555,7 @@ const ReportButton: React.FC = () => {
       setTrendImgUrl(trendImgBase64);
 
       // 核心趋势变量统一用lastTwoByMonth，删除所有M变量声明
-      const getMetricInfo = (raw: any) => lastTwoByMonth(raw);
+      const getMetricInfo = (raw: SeriesData | TimeSeriesData | null | undefined): LastTwoByMonthResult => lastTwoByMonth(raw);
 
       // 统一图片生成函数，直接在handleClick时等待base64生成即可
       // 删除所有 trendImgBase64/months/mformat/getvalues 的重复声明，只保留 handleClick 内主逻辑的声明。
@@ -717,24 +636,7 @@ const ReportButton: React.FC = () => {
       const aiInsight = overview;
 
       // 获取上一个季度标题（始终显示上一个季度）
-      const getPreviousQuarterTitle = (): string => {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1; // 1-12
-        const currentQ = Math.ceil(currentMonth / 3);
-        
-        // 计算上一个季度
-        let prevQ = currentQ - 1;
-        let prevY = currentYear;
-        if (prevQ < 1) {
-          prevQ = 4;
-          prevY = currentYear - 1;
-        }
-        
-        return `${prevY}Q${prevQ}`;
-      };
-      
-      const quarterTitle = getPreviousQuarterTitle();
+      const quarterTitle = getQuarterTitle(reportQuarter.year, reportQuarter.quarter);
       const md = `# 🗓️ OpenDigger 项目季度报告（${quarterTitle || ''}）
 
 > 报告周期：${period}  
