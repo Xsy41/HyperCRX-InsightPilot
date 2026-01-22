@@ -1,6 +1,6 @@
 import { getMetricByName } from './common';
 
-// metric names and their implementation names in OpenDigger
+// Developer metric names and their implementation names in OpenDigger.
 const metricNameMap = new Map([
   ['activity', 'activity'],
   ['openrank', 'openrank'],
@@ -8,6 +8,7 @@ const metricNameMap = new Map([
   ['repo_network', 'repo_network'],
 ]);
 
+// Thin wrappers mapping developer metrics to OpenDigger JSON files.
 export const getActivity = async (platform: string, user: string) => {
   return getMetricByName(platform, user, metricNameMap, 'activity');
 };
