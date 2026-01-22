@@ -214,13 +214,13 @@ const ReportButton: React.FC = () => {
       const quarterMonthsSet = new Set(quarterMonths);
       
       // 过滤函数：只保留季度相关的月份数据
-      const filterByQuarter = (data: any): any => {
+      const filterByQuarter = (data: SeriesData | TimeSeriesData | null | undefined): SeriesData | TimeSeriesData | null | undefined => {
         if (!data) return data;
         if (Array.isArray(data)) {
-          return data.filter(([month]: [string, any]) => quarterMonthsSet.has(month));
+          return data.filter(([month]: [string, number]) => quarterMonthsSet.has(month)) as TimeSeriesData;
         }
         if (typeof data === 'object') {
-          const filtered: any = {};
+          const filtered: SeriesData = {};
           Object.keys(data).forEach(key => {
             const month = String(key).replace(/^([0-9]{4})-([0-9]{1,2})$/, (_, y, m) => `${y}-${m.padStart(2, '0')}`);
             if (quarterMonthsSet.has(month)) {
@@ -233,7 +233,7 @@ const ReportButton: React.FC = () => {
       };
 
       // 过滤数据，只保留报告季度和对比季度的数据（半年数据）
-      const filteredPayload = {
+      const filteredPayload: FilteredPayload = {
         repoName: repo,
         quarter: `${reportY}Q${reportQ}`,
         prevQuarter: `${compareY}Q${compareQ}`,
@@ -278,7 +278,7 @@ const ReportButton: React.FC = () => {
 
       // 只提取并保留用于核心展示和下游图片的部分变量，其它辅助函数精简（删除调试log与未用到的小函数）
       // 核心里用于图片生成功能、趋势计算的 helpers
-      const normalizeSeries = (series: any): [string, number][] => {
+      const normalizeSeries = (series: SeriesData | TimeSeriesData | null | undefined): TimeSeriesData => {
         if (!series) return [];
         if (Array.isArray(series)) return series as [string, number][];
         if (typeof series === 'object') {
@@ -295,11 +295,11 @@ const ReportButton: React.FC = () => {
         }
         return [];
       };
-      const monthlyEntries = (raw: any): [string, number][] => {
+      const monthlyEntries = (raw: SeriesData | TimeSeriesData | null | undefined): TimeSeriesData => {
         return normalizeSeries(raw).filter(([k]) => /^\d{4}-\d{2}$/.test(String(k)));
       };
-      const lastMonthFrom = (series: any[]) => (series && series.length ? series[series.length - 1][0] : '');
-      const lastTwoByMonth = (raw: any) => {
+      const lastMonthFrom = (series: TimeSeriesData): string => (series && series.length ? series[series.length - 1][0] : '');
+      const lastTwoByMonth = (raw: SeriesData | TimeSeriesData | null | undefined): LastTwoByMonthResult => {
         const series = monthlyEntries(raw);
         const map = new Map<string, number>();
         series.forEach((it) => {
@@ -317,21 +317,21 @@ const ReportButton: React.FC = () => {
       };
 
       // 从 activity_details（与 racing-bar 一致的月度结构）取当月Top3，否则回退 GitHub /contributors
-      const pickTopContributors = () => {
-        let top: { login: string; commits?: number }[] = [];
+      const pickTopContributors = (): ContributorInfo[] => {
+        let top: ContributorInfo[] = [];
         try {
-          const monthly = getMonthlyData((activityDetails as any) || {});
+          const monthly = getMonthlyData(activityDetails || {});
           const months = Object.keys(monthly)
             .filter((k) => /^\d{4}-\d{2}$/.test(k))
             .sort();
           if (months.length) {
             const last = months[months.length - 1];
-            const arr = (monthly as any)[last] as [string, number][];
+            const arr = monthly[last] as TimeSeriesData | undefined;
             top = (arr || []).slice(0, 3).map((it) => ({ login: it[0], commits: it[1] }));
           }
         } catch {}
         if (!top.length && Array.isArray(ghContributors)) {
-          top = ghContributors.slice(0, 3).map((c: any) => ({ login: c.login, commits: c.contributions }));
+          top = ghContributors.slice(0, 3).map((c) => ({ login: c.login, commits: c.contributions }));
         }
         return top;
       };
@@ -630,7 +630,7 @@ const ReportButton: React.FC = () => {
       setTrendImgUrl(trendImgBase64);
 
       // 核心趋势变量统一用lastTwoByMonth，删除所有M变量声明
-      const getMetricInfo = (raw: any) => lastTwoByMonth(raw);
+      const getMetricInfo = (raw: SeriesData | TimeSeriesData | null | undefined): LastTwoByMonthResult => lastTwoByMonth(raw);
 
       // 统一图片生成函数，直接在handleClick时等待base64生成即可
       // 删除所有 trendImgBase64/months/mformat/getvalues 的重复声明，只保留 handleClick 内主逻辑的声明。
