@@ -525,16 +525,16 @@ const ReportButton: React.FC = () => {
           },
           yAxis: { type: 'value', splitNumber: 4 },
           series: [
-            { name: 'Activity', data: activity6, type: 'line', smooth: true, connectNulls: true },
-            { name: 'OpenRank', data: openrank6, type: 'line', smooth: true, connectNulls: true },
-            { name: 'Star', data: star6, type: 'line', smooth: true, connectNulls: true },
-            { name: 'Fork', data: fork6, type: 'line', smooth: true, connectNulls: true },
-            { name: '贡献者', data: contributor6, type: 'line', smooth: true, connectNulls: true },
+            { name: 'Activity', data: getvalues(activity), type: 'line', smooth: true, connectNulls: true },
+            { name: 'OpenRank', data: getvalues(openrank), type: 'line', smooth: true, connectNulls: true },
+            { name: 'Star', data: getvalues(stars), type: 'line', smooth: true, connectNulls: true },
+            { name: 'Fork', data: getvalues(forks), type: 'line', smooth: true, connectNulls: true },
+            { name: '贡献者', data: getvalues(contributor), type: 'line', smooth: true, connectNulls: true },
           ],
         });
 
         await new Promise((res) => setTimeout(res, 350));
-        chartUrl = chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
+        const chartUrl = chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
         setTrendImgUrl(chartUrl);
         chart.dispose();
       }
