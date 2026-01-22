@@ -61,13 +61,13 @@ const OpenrankView = ({ openrank, meta }: Props): JSX.Element | null => {
       })
         .then((r) => {
           if (!r.ok) {
-            console.error('OpenRank AI API 错误:', r.status, r.statusText);
+            // API 错误已通过错误处理机制处理
             return null;
           }
           return r.json();
         })
-        .catch((err) => {
-          console.error('OpenRank AI API 请求失败:', err);
+        .catch(() => {
+          // API 请求失败已通过错误处理机制处理
           return null;
         });
 
@@ -77,7 +77,6 @@ const OpenrankView = ({ openrank, meta }: Props): JSX.Element | null => {
       } else {
         // 如果 API 失败，显示错误信息或使用回退
         const errorMsg = resp?.error || '无法连接到后端服务，请确保后端已启动（http://localhost:5001）';
-        console.error('OpenRank AI 解读失败:', errorMsg);
         const info = lastTwo(openrankData);
         setAiSummary(`基于最近6个月（截至 ${info.curMonth}）的 OpenRank 数据，项目的外部影响力呈现一定变化趋势。\n\n[提示: ${errorMsg}]`);
       }
