@@ -28,7 +28,7 @@ import isGithub from '../../../../helpers/is-github';
 import { githubRequest } from '../../../../api/githubApi';
 import { getMonthlyData } from '../repo-activity-racing-bar/data';
 import generateDataByMonth from '../../../../helpers/generate-data-by-month';
-import type { TimeSeriesData, SeriesData, LastTwoByMonthResult, ContributorInfo, FilteredPayload } from './types';
+import { API_ENDPOINTS } from '../../../../config/api';
 
 const ReportButton: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -255,7 +255,7 @@ const ReportButton: React.FC = () => {
       };
 
       // 获取结论与分析（使用完整数据）
-      const reportResp = await fetch('http://localhost:5001/api/report', {
+      const reportResp = await fetch(API_ENDPOINTS.REPORT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data: { issuesOpened, issuesClosed, issueComments } }),
@@ -265,7 +265,7 @@ const ReportButton: React.FC = () => {
       const summary = reportResp?.summary || '';
 
       // 深度洞察使用过滤后的季度数据
-      const analyzeResp = await fetch('http://localhost:5001/api/analyze', {
+      const analyzeResp = await fetch(API_ENDPOINTS.ANALYZE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(filteredPayload),
