@@ -28,6 +28,7 @@ import isGithub from '../../../../helpers/is-github';
 import { githubRequest } from '../../../../api/githubApi';
 import { getMonthlyData } from '../repo-activity-racing-bar/data';
 import generateDataByMonth from '../../../../helpers/generate-data-by-month';
+import { normalizeSeries, monthlyEntries, lastMonthFrom, lastTwoByMonth, formatMonthShort } from './formatting-utils';
 import {
   getPreviousQuarter,
   getNextQuarter,
@@ -163,11 +164,7 @@ const ReportButton: React.FC = () => {
       // months、getvalues、mformat 也单独定义（与 useEffect分离）
       const trendData = generateDataByMonth(activity, Date.now());
       const months = trendData.map(([month]: [string, number]) => month);
-      const mformat = (m: string) => {
-        const [y, mo] = String(m).split('-');
-        const yy = (y || '').slice(-2);
-        return `${yy}/${mo || ''}`;
-      };
+      const mformat = formatMonthShort;
       const months6 = months.slice(-6);
       const getvalues = (series: Record<string, number>) => {
         const arr = generateDataByMonth(series, Date.now());
