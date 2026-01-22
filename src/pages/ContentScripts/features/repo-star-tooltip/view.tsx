@@ -51,8 +51,8 @@ const View = ({ stars, meta }: Props): JSX.Element | null => {
           }
           return r.json();
         })
-        .catch((err) => {
-          console.error('Star AI API 请求失败:', err);
+        .catch(() => {
+          // API 请求失败已通过错误处理机制处理
           return null;
         });
 
@@ -62,11 +62,9 @@ const View = ({ stars, meta }: Props): JSX.Element | null => {
       } else {
         // 如果 API 失败，显示错误信息或使用回退
         const errorMsg = resp?.error || '无法连接到后端服务，请确保后端已启动（http://localhost:5001）';
-        console.error('Star AI 解读失败:', errorMsg);
         setAiSummary(`无法生成解读。\n\n[提示: ${errorMsg}]`);
       }
-    } catch (error) {
-      console.error('Star AI 解读异常:', error);
+    } catch {
       setAiSummary(`无法生成解读。\n\n[错误: 请检查后端服务是否正常运行]`);
     } finally {
       setAiLoading(false);

@@ -169,7 +169,7 @@ const ReportButton: React.FC = () => {
         const yy = (y || '').slice(-2);
         return `${yy}/${mo || ''}`;
       };
-      const months6 = months.slice(-6);
+      const months6 = months.slice(-REPORT_CONFIG.MONTHS_TO_ANALYZE);
       const getvalues = (series: Record<string, number>) => {
         const arr = generateDataByMonth(series, Date.now());
         const map = new Map(arr);
@@ -373,18 +373,26 @@ const ReportButton: React.FC = () => {
         return `${y} Q${q}`;
       };
       const trendWord = (p: number) =>
-        p > 20 ? '显著上升' : p > 0 ? '小幅上升' : p < -20 ? '显著下降' : p < 0 ? '略有下降' : '基本稳定';
+        p > TREND_THRESHOLDS.SIGNIFICANT_INCREASE ? TREND_DESCRIPTIONS.SIGNIFICANT_UP
+        : p > 0 ? TREND_DESCRIPTIONS.SLIGHT_UP
+        : p < TREND_THRESHOLDS.SIGNIFICANT_DECREASE ? TREND_DESCRIPTIONS.SIGNIFICANT_DOWN
+        : p < 0 ? TREND_DESCRIPTIONS.SLIGHT_DOWN
+        : TREND_DESCRIPTIONS.STABLE;
       const prRateTrendWord = (p: number) =>
-        p > 10 ? '效率明显提升' : p > 0 ? '略有优化' : p < -10 ? '合并率下滑限制协作' : p < 0 ? '轻微下滑' : '持平';
+        p > TREND_THRESHOLDS.PR_RATE_SIGNIFICANT ? PR_RATE_DESCRIPTIONS.EFFICIENCY_IMPROVED
+        : p > 0 ? PR_RATE_DESCRIPTIONS.SLIGHT_OPTIMIZATION
+        : p < TREND_THRESHOLDS.PR_RATE_DECREASE ? PR_RATE_DESCRIPTIONS.RATE_DECLINED
+        : p < 0 ? PR_RATE_DESCRIPTIONS.SLIGHT_DECLINE
+        : PR_RATE_DESCRIPTIONS.FLAT;
       const plusPct = (v: number) => (v >= 0 ? `+${v}%` : `${v}%`);
       const starDeltaDesc =
-        lastTwoByMonth(stars).pct > 100
-          ? `大幅增长，或因近期更新/传播`
+        lastTwoByMonth(stars).pct > TREND_THRESHOLDS.STAR_GROWTH_HIGH
+          ? STAR_DELTA_DESCRIPTIONS.HIGH_GROWTH
           : lastTwoByMonth(stars).pct > 0
-            ? `小幅增长`
+            ? STAR_DELTA_DESCRIPTIONS.SLIGHT_GROWTH
             : lastTwoByMonth(stars).pct < 0
-              ? `回落`
-              : `无明显变化`;
+              ? STAR_DELTA_DESCRIPTIONS.DECLINE
+              : STAR_DELTA_DESCRIPTIONS.NO_CHANGE;
 
       const arrow = (v: number) => (v > 0 ? '↑' : v < 0 ? '↓' : '→');
       const pctWord = (v: number) => `${arrow(v)} ${plusPct(Math.abs(v))}`;
@@ -529,16 +537,16 @@ const ReportButton: React.FC = () => {
           },
           yAxis: { type: 'value', splitNumber: 4 },
           series: [
-            { name: 'Activity', data: activity6, type: 'line', smooth: true, connectNulls: true },
-            { name: 'OpenRank', data: openrank6, type: 'line', smooth: true, connectNulls: true },
-            { name: 'Star', data: star6, type: 'line', smooth: true, connectNulls: true },
-            { name: 'Fork', data: fork6, type: 'line', smooth: true, connectNulls: true },
-            { name: '贡献者', data: contributor6, type: 'line', smooth: true, connectNulls: true },
+            { name: 'Activity', data: getvalues(activity), type: 'line', smooth: true, connectNulls: true },
+            { name: 'OpenRank', data: getvalues(openrank), type: 'line', smooth: true, connectNulls: true },
+            { name: 'Star', data: getvalues(stars), type: 'line', smooth: true, connectNulls: true },
+            { name: 'Fork', data: getvalues(forks), type: 'line', smooth: true, connectNulls: true },
+            { name: '贡献者', data: getvalues(contributor), type: 'line', smooth: true, connectNulls: true },
           ],
         });
 
         await new Promise((res) => setTimeout(res, 350));
-        chartUrl = chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
+        const chartUrl = chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' });
         setTrendImgUrl(chartUrl);
         chart.dispose();
       }
