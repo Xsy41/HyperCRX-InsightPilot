@@ -254,24 +254,31 @@ const ReportButton: React.FC = () => {
       };
 
       // 获取结论与分析（使用完整数据）
-      const reportResp = await fetch('http://localhost:5001/api/report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: { issuesOpened, issuesClosed, issueComments } }),
-      })
-        .then((r) => r.json())
-        .catch(() => ({}));
-      const summary = reportResp?.summary || '';
+      let summary = '';
+      let longInsight = '';
+      
+      try {
+        const reportResp = await apiCall<{ summary?: string }>(API_ENDPOINTS.REPORT, {
+          method: 'POST',
+          body: JSON.stringify({ data: { issuesOpened, issuesClosed, issueComments } }),
+        });
+        summary = reportResp?.summary || '';
+      } catch (error) {
+        console.error('获取报告摘要失败:', error);
+        // 继续执行，summary 保持为空字符串
+      }
 
       // 深度洞察使用过滤后的季度数据
-      const analyzeResp = await fetch('http://localhost:5001/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(filteredPayload),
-      })
-        .then((r) => r.json())
-        .catch(() => ({ analysisReport: '' }));
-      const longInsight = analyzeResp?.analysisReport || '';
+      try {
+        const analyzeResp = await apiCall<{ analysisReport?: string }>(API_ENDPOINTS.ANALYZE, {
+          method: 'POST',
+          body: JSON.stringify(filteredPayload),
+        });
+        longInsight = analyzeResp?.analysisReport || '';
+      } catch (error) {
+        console.error('获取深度洞察失败:', error);
+        // 继续执行，longInsight 保持为空字符串
+      }
 
       // 不再单独获取 OpenRank 和 Star 的 AI 解读，只保留综合分析和深度洞察
 
