@@ -28,7 +28,7 @@ import isGithub from '../../../../helpers/is-github';
 import { githubRequest } from '../../../../api/githubApi';
 import { getMonthlyData } from '../repo-activity-racing-bar/data';
 import generateDataByMonth from '../../../../helpers/generate-data-by-month';
-import { normalizeSeries, monthlyEntries, lastMonthFrom, lastTwoByMonth, formatMonthShort } from './formatting-utils';
+import { getValidatedRepoName } from './validation';
 import {
   getPreviousQuarter,
   getNextQuarter,
@@ -123,7 +123,7 @@ const ReportButton: React.FC = () => {
     if (loading) return;
     setLoading(true);
     try {
-      const repo = getRepoName();
+      const repo = getValidatedRepoName(getRepoName());
       const platform = getPlatform();
       // 获取数据
       const [
