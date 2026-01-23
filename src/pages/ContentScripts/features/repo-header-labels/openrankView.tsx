@@ -10,6 +10,7 @@ import TooltipTrigger from '../../../../components/TooltipTrigger';
 import { useTranslation } from 'react-i18next';
 import '../../../../helpers/i18n';
 import isGithub from '../../../../helpers/is-github';
+import { API_ENDPOINTS } from '../../../../config/api';
 const theme = isGithub() ? getGithubTheme() : 'light';
 
 interface Props {

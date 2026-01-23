@@ -31,20 +31,20 @@ export interface FilteredPayload {
   repoName: string;
   quarter: string;
   prevQuarter: string;
-  activity: SeriesData | TimeSeriesData;
-  openrank: SeriesData | TimeSeriesData;
-  attention: SeriesData | TimeSeriesData;
-  participant: SeriesData | TimeSeriesData;
-  contributor: SeriesData | TimeSeriesData;
-  stars: SeriesData | TimeSeriesData;
-  forks: SeriesData | TimeSeriesData;
-  issuesOpened: SeriesData | TimeSeriesData;
-  issuesClosed: SeriesData | TimeSeriesData;
-  issueComments: SeriesData | TimeSeriesData;
-  prOpened: SeriesData | TimeSeriesData;
-  prMerged: SeriesData | TimeSeriesData;
-  prReviews: SeriesData | TimeSeriesData;
-  issueResponseTime: SeriesData | TimeSeriesData;
-  issueResolutionDuration: SeriesData | TimeSeriesData;
+  activity: SeriesData | TimeSeriesData | null | undefined;
+  openrank: SeriesData | TimeSeriesData | null | undefined;
+  attention: SeriesData | TimeSeriesData | null | undefined;
+  participant: SeriesData | TimeSeriesData | null | undefined;
+  contributor: SeriesData | TimeSeriesData | null | undefined;
+  stars: SeriesData | TimeSeriesData | null | undefined;
+  forks: SeriesData | TimeSeriesData | null | undefined;
+  issuesOpened: SeriesData | TimeSeriesData | null | undefined;
+  issuesClosed: SeriesData | TimeSeriesData | null | undefined;
+  issueComments: SeriesData | TimeSeriesData | null | undefined;
+  prOpened: SeriesData | TimeSeriesData | null | undefined;
+  prMerged: SeriesData | TimeSeriesData | null | undefined;
+  prReviews: SeriesData | TimeSeriesData | null | undefined;
+  issueResponseTime: SeriesData | TimeSeriesData | null | undefined;
+  issueResolutionDuration: SeriesData | TimeSeriesData | null | undefined;
 }
 
