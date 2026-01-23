@@ -36,6 +36,9 @@ import {
   getQuarterTitle,
   getQuarterPeriod,
 } from '../../../../helpers/quarter-utils';
+import type { TimeSeriesData, SeriesData, LastTwoByMonthResult, ContributorInfo, FilteredPayload } from './types';
+import { apiCall } from './api-helpers';
+import { API_ENDPOINTS } from '../../../../config/api';
 
 const ReportButton: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -314,7 +317,7 @@ const ReportButton: React.FC = () => {
       const lastTwoByMonth = (raw: SeriesData | TimeSeriesData | null | undefined): LastTwoByMonthResult => {
         const series = monthlyEntries(raw);
         const map = new Map<string, number>();
-        series.forEach((it) => {
+        series.forEach((it: [string, number]) => {
           const k = String(it[0]);
           const v = Number(it[1]) || 0;
           map.set(k, v);
@@ -339,7 +342,7 @@ const ReportButton: React.FC = () => {
           if (months.length) {
             const last = months[months.length - 1];
             const arr = monthly[last] as TimeSeriesData | undefined;
-            top = (arr || []).slice(0, 3).map((it) => ({ login: it[0], commits: it[1] }));
+            top = (arr || []).slice(0, 3).map((it: [string, number]) => ({ login: it[0], commits: it[1] }));
           }
         } catch {}
         if (!top.length && Array.isArray(ghContributors)) {
